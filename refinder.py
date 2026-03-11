@@ -9,18 +9,20 @@ import openai
 from config import (
     ARABIC_SYSTEM_PROMPT,
     ARABIC_USER_PROMPT_TEMPLATE,
-    AZURE_OPENAI_API,
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_DEPLOYMENT,
     AZURE_OPENAI_ENDPOINT,
     ENGLISH_SYSTEM_PROMPT,
     ENGLISH_USER_PROMPT_TEMPLATE,
-)
+    AZURE_OPENAI_KEY,
 
+)
+import os
+import sys
 
 def _get_azure_client() -> openai.AzureOpenAI:
     return openai.AzureOpenAI(
-        api_key=AZURE_OPENAI_API,
+        api_key=AZURE_OPENAI_KEY,
         api_version=AZURE_OPENAI_API_VERSION,
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
     )
@@ -66,7 +68,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python refiner.py <transcript.txt>")
         sys.exit(1)
-
+    from pathlib import Path
     transcript = Path(sys.argv[1]).read_text(encoding="utf-8")
     context = "Test call between customer and agent at ELAraby Group."
 

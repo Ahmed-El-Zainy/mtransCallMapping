@@ -6,11 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Azure OpenAI ──────────────────────────────────────────────────────────────
-AZURE_OPENAI_KEY= os.getenv("AZURE_OPENAI_KEY", "")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_KEY= os.environ["AZURE_OPENAI_API_KEY"]
+AZURE_OPENAI_ENDPOINT = os.environ["AZURE_OPENAI_ENDPOINT"]
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
 
+# print(f"Loaded Azure OpenAI config: endpoint={AZURE_OPENAI_ENDPOINT}, deployment={AZURE_OPENAI_DEPLOYMENT}")
 # ── OpenAI Whisper ────────────────────────────────────────────────────────────
 # OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
@@ -112,6 +113,9 @@ def extract_context_from_filename(filename: str) -> str:
         context_parts.append(f"Source file: {filename}")
 
     return "\n".join(context_parts)
+
+
+
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
