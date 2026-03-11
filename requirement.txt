@@ -1,0 +1,17 @@
+# API framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+python-dotenv>=1.0.1
+websockets>=12.0
+
+# Azure Speech-to-Text
+azure-cognitiveservices-speech>=1.38.0
+
+# Azure OpenAI (transcript refinement)
+openai>=1.30.0
+httpx>=0.27.0
+
+# Audio format conversion (mp3/m4a/ogg → wav)
+# Requires ffmpeg installed on the system:  apt install ffmpeg  /  brew install ffmpeg
+pydub>=0.25.1
