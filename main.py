@@ -1,40 +1,48 @@
 """
-main.py – FastAPI application for transCallMapping.
+main.py – FastAPI — three ways to call the refiner pipeline.
 
-Endpoints
----------
-POST /transcribe              Upload audio → transcription only (HTTP)
-POST /process                 Upload audio → full pipeline (HTTP)
-WS   /ws/process              Full pipeline with real-time progress (WebSocket)
-GET  /health                  Health check
-GET  /outputs                 List saved output files
-GET  /outputs/{filename}      Download a saved output file
+┌─────────────────────┬────────────────┬───────────────┬──────────────────┐
+│ Endpoint            │ Method         │ Response      │ Streaming        │
+├─────────────────────┼────────────────┼───────────────┼──────────────────┤
+│ POST /refine        │ HTTP           │ JSON          │ ❌ blocking      │
+│ POST /refine/stream │ HTTP SSE       │ text/event-   │ ✅ token-by-tok  │
+│                     │                │ stream        │                  │
+│ WS   /ws/refine     │ WebSocket      │ JSON messages │ ✅ token-by-tok  │
+└─────────────────────┴────────────────┴───────────────┴──────────────────┘
+
+All three share the same event schema (SSE wraps it in  data: ...\n\n):
+
+  {"event":"start",        "section":"arabic"|"english"|"summary"}
+  {"event":"token",        "section":"...", "token":"<text>"}
+  {"event":"section_done", "section":"...", "text":"<full section text>"}
+  {"event":"done",         "arabic_refined":"...",
+                           "english_refined":"...", "summary":{...}}
+  {"event":"error",        "message":"..."}
 """
 
 from __future__ import annotations
 
-import base64
+import asyncio
 import json
-from pathlib import Path
+from typing import AsyncGenerator
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
-from config import OUTPUT_DIR, SUPPORTED_AUDIO_EXTENSIONS, extract_context_from_filename
-from app.transcriber import transcribe_audio
-from app.refiner import refine_arabic, refine_english
-from app.writer import save_outputs
-from app.ws_process import run_pipeline
+from refiner import run_pipeline, stream_pipeline
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="transCallMapping API",
+    title="transCallMapping — Refiner API",
     description=(
-        "Audio call transcription + Arabic & English refinement "
-        "for ELAraby Group customer-service calls.\n\n"
-        "**WebSocket** `/ws/process` — real-time progress streaming.\n"
-        "**HTTP** `/process` — classic single-response endpoint."
+        "**Refine a raw call transcript three ways:**\n\n"
+        "| Endpoint | Streaming | Use when |\n"
+        "|---|---|---|\n"
+        "| `POST /refine` | ❌ | Simple integrations, Postman quick test |\n"
+        "| `POST /refine/stream` | ✅ SSE | Browser `EventSource`, curl, Postman |\n"
+        "| `WS /ws/refine` | ✅ WS | Real-time UI, persistent connections |\n"
     ),
     version="2.0.0",
 )
@@ -47,122 +55,218 @@ app.add_middleware(
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def _validate_audio(file: UploadFile) -> None:
-    ext = Path(file.filename).suffix.lower()
-    if ext not in SUPPORTED_AUDIO_EXTENSIONS:
-        raise HTTPException(
-            status_code=415,
-            detail=(
-                f"Unsupported file type '{ext}'. "
-                f"Accepted formats: {', '.join(sorted(SUPPORTED_AUDIO_EXTENSIONS))}"
-            ),
-        )
+# ── Request model (shared by all three endpoints) ─────────────────────────────
+
+class RefineRequest(BaseModel):
+    transcript:   str = Field(..., description="Raw transcript from the STT API")
+    context_info: str = Field("",  description="Optional: call date, agent ID, topic…")
 
 
-# ── WebSocket ─────────────────────────────────────────────────────────────────
+# ── Core async bridge ─────────────────────────────────────────────────────────
+# stream_pipeline() is a *synchronous* blocking generator (it calls Azure OpenAI
+# with stream=True in a regular for-loop).  We run it in a thread-pool executor
+# and forward each yielded event through an asyncio.Queue so FastAPI's async
+# event loop can consume it without blocking.
 
-@app.websocket("/ws/process")
-async def ws_process(websocket: WebSocket):
+async def _iter_pipeline(transcript: str, context_info: str) -> AsyncGenerator[dict, None]:
     """
-    WebSocket endpoint — full pipeline with real-time progress.
+    Bridges the blocking stream_pipeline() generator into async-land.
 
-    ## Protocol
+    Yields dicts:
+        {"event":"start"|"token"|"section_done"|"done"|"error", ...}
+    """
+    loop  = asyncio.get_running_loop()          # ← correct API (3.7+)
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
-    ### 1. Connect
-    ```
-    ws://localhost:8000/ws/process
-    ```
+    def _producer() -> None:
+        """Runs in a thread — calls Azure, pushes events onto the queue."""
+        try:
+            for event in stream_pipeline(transcript, context_info):
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+        except Exception as exc:
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                {"event": "error", "message": str(exc)},
+            )
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)   # sentinel
 
-    ### 2. Client sends ONE message (JSON):
+    # Schedule producer in thread-pool and immediately start consuming the queue
+    future = loop.run_in_executor(None, _producer)   # non-blocking
+
+    try:
+        while True:
+            event = await queue.get()
+            if event is None:       # sentinel → producer finished
+                break
+            yield event
+    finally:
+        await asyncio.shield(future)   # make sure the thread finishes cleanly
+
+
+# ── 1. Blocking HTTP  POST /refine ────────────────────────────────────────────
+
+@app.get("/health", tags=["System"])
+async def health():
+    return {"status": "ok", "service": "transCallMapping-refiner", "version": "2.0.0"}
+
+
+@app.post("/refine", tags=["1 · HTTP Blocking"])
+async def refine_blocking(req: RefineRequest):
+    """
+    Runs the full pipeline and returns **one JSON response** when everything
+    is done.  Simple to call — but the client waits silently for 30–90 s.
+
     ```json
     {
-      "filename": "20240315_AGT001_CUST4892_complaint.mp3",
-      "audio_b64": "<base64-encoded audio bytes>"
+      "original_transcription": "...",
+      "context_info": "...",
+      "arabic_refined": "...",
+      "english_refined": "...",
+      "summary": { ... }
     }
     ```
+    """
+    if not req.transcript.strip():
+        raise HTTPException(status_code=422, detail="transcript must not be empty.")
+    try:
+        result = await asyncio.to_thread(run_pipeline, req.transcript, req.context_info)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse(result)
 
-    ### 3. Server streams progress events:
-    ```json
-    { "event": "progress", "step": 1, "total": 6, "message": "Validating audio file…" }
-    { "event": "progress", "step": 2, "total": 6, "message": "Context detected:\\nCall Date: 2024-03-15\\n…" }
-    { "event": "progress", "step": 3, "total": 6, "message": "Transcribing audio with Whisper…" }
-    { "event": "progress", "step": 3, "total": 6, "message": "Transcription complete — 42 segments" }
-    { "event": "progress", "step": 4, "total": 6, "message": "Refining Arabic version…" }
-    { "event": "progress", "step": 4, "total": 6, "message": "Arabic refinement complete ✓" }
-    { "event": "progress", "step": 5, "total": 6, "message": "Refining English version…" }
-    { "event": "progress", "step": 5, "total": 6, "message": "English refinement complete ✓" }
-    { "event": "progress", "step": 6, "total": 6, "message": "Saving output files…" }
-    { "event": "progress", "step": 6, "total": 6, "message": "All files saved ✓" }
+
+# ── 2. SSE streaming  POST /refine/stream ────────────────────────────────────
+
+@app.post("/refine/stream", tags=["2 · SSE Streaming"])
+async def refine_sse(req: RefineRequest):
+    """
+    **Server-Sent Events** — tokens stream as `text/event-stream` the moment
+    Azure OpenAI generates them.
+
+    ### SSE message format
+    Each message is one line: `data: <json>\\n\\n`
+
+    ```
+    data: {"event":"start","section":"arabic"}
+
+    data: {"event":"token","section":"arabic","token":"أهلاً"}
+
+    data: {"event":"token","section":"arabic","token":" وسهلاً"}
+
+    data: {"event":"section_done","section":"arabic","text":"أهلاً وسهلاً..."}
+
+    data: {"event":"start","section":"english"}
+    ...
+    data: {"event":"done","arabic_refined":"...","english_refined":"...","summary":{}}
+
+    data: [DONE]
     ```
 
-    ### 4. Server sends final result:
+    ### How to test in Postman
+    1. New request → **POST** → `http://localhost:8000/refine/stream`
+    2. Body → raw → JSON → paste request body
+    3. Hit **Send**
+    4. Watch the **Response** panel — lines appear token-by-token in real time
+
+    ### How to test with curl
+    ```bash
+    curl -N -X POST http://localhost:8000/refine/stream \\
+      -H "Content-Type: application/json" \\
+      -d '{"transcript":"مساء الخدمة...","context_info":""}'
+    ```
+    (`-N` disables curl buffering so you see tokens as they arrive)
+    """
+    if not req.transcript.strip():
+        raise HTTPException(status_code=422, detail="transcript must not be empty.")
+
+    async def _sse_generator():
+        async for event in _iter_pipeline(req.transcript, req.context_info):
+            line = json.dumps(event, ensure_ascii=False)
+            yield f"data: {line}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":     "no-cache",
+            "Connection":        "keep-alive",
+            "X-Accel-Buffering": "no",    # disable nginx / proxy buffering
+        },
+    )
+
+
+# ── 3. WebSocket streaming  WS /ws/refine ────────────────────────────────────
+
+@app.websocket("/ws/refine")
+async def ws_refine(websocket: WebSocket):
+    """
+    **WebSocket** — identical event stream to SSE, but over a persistent
+    bi-directional connection (no `data:` prefix, raw JSON per message).
+
+    ### Protocol
+    **Client → Server** (one message to start the pipeline):
     ```json
-    {
-      "event": "result",
-      "filename": "…",
-      "context_info": "…",
-      "processed_at": "…",
-      "original_transcription": "…",
-      "arabic_refined": "…",
-      "english_refined": "…",
-      "output_files": { "original": "…", "arabic": "…", "english": "…", "json": "…" }
-    }
+    {"transcript": "مساء الخدمة...", "context_info": "Agent: AGT001"}
     ```
 
-    ### On error:
+    **Server → Client** (many messages, token-by-token):
     ```json
-    { "event": "error", "step": 3, "total": 6, "message": "Transcription failed: …" }
+    {"event":"start","section":"arabic"}
+    {"event":"token","section":"arabic","token":"أهلاً"}
+    {"event":"token","section":"arabic","token":" وسهلاً"}
+    ...
+    {"event":"section_done","section":"arabic","text":"أهلاً وسهلاً..."}
+    {"event":"start","section":"english"}
+    ...
+    {"event":"done","arabic_refined":"...","english_refined":"...","summary":{}}
     ```
+
+    ### How to test in Postman
+    1. New → **WebSocket**
+    2. URL: `ws://localhost:8000/ws/refine`
+    3. Click **Connect**
+    4. In the message box paste the JSON above → **Send**
+    5. Watch messages arrive token-by-token in the **Messages** panel
     """
     await websocket.accept()
 
     try:
-        # Receive the initial message from client
+        # ── Receive the single request message ────────────────────────────────
         raw = await websocket.receive_text()
         try:
             msg = json.loads(raw)
         except json.JSONDecodeError:
             await websocket.send_text(json.dumps({
                 "event":   "error",
-                "step":    0,
-                "total":   6,
-                "message": "Invalid JSON. Send: {\"filename\": \"…\", \"audio_b64\": \"…\"}",
+                "message": 'Invalid JSON. Expected: {"transcript":"...","context_info":"..."}',
             }))
-            await websocket.close()
             return
 
-        filename  = msg.get("filename", "upload.mp3")
-        audio_b64 = msg.get("audio_b64", "")
+        transcript   = msg.get("transcript",   "").strip()
+        context_info = msg.get("context_info", "")
 
-        if not audio_b64:
+        if not transcript:
             await websocket.send_text(json.dumps({
-                "event":   "error",
-                "step":    0,
-                "total":   6,
-                "message": "Missing 'audio_b64' field. Send base64-encoded audio bytes.",
+                "event": "error", "message": "transcript must not be empty.",
             }))
-            await websocket.close()
             return
 
-        # Decode audio
-        try:
-            audio_bytes = base64.b64decode(audio_b64)
-        except Exception:
-            await websocket.send_text(json.dumps({
-                "event":   "error",
-                "step":    0,
-                "total":   6,
-                "message": "Failed to decode 'audio_b64'. Must be valid base64.",
-            }))
-            await websocket.close()
-            return
-
-        # Run the pipeline — streams progress back to client
-        await run_pipeline(websocket, audio_bytes, filename)
+        # ── Stream every event to the client ──────────────────────────────────
+        async for event in _iter_pipeline(transcript, context_info):
+            await websocket.send_text(json.dumps(event, ensure_ascii=False))
 
     except WebSocketDisconnect:
-        pass  # Client disconnected mid-stream — nothing to do
+        pass    # client closed the tab / connection — nothing to do
+
+    except Exception as exc:
+        try:
+            await websocket.send_text(
+                json.dumps({"event": "error", "message": str(exc)})
+            )
+        except Exception:
+            pass
 
     finally:
         try:
@@ -171,95 +275,20 @@ async def ws_process(websocket: WebSocket):
             pass
 
 
-# ── HTTP endpoints (kept for backwards compatibility) ─────────────────────────
-
-@app.get("/health", tags=["System"])
-async def health():
-    """Simple liveness check."""
-    return {"status": "ok", "service": "transCallMapping", "version": "2.0.0"}
 
 
-@app.post("/transcribe", tags=["HTTP"])
-async def transcribe_only(audio: UploadFile = File(...)):
-    """
-    Transcribe an audio file using Whisper (HTTP, no streaming).
+if __name__ == "__main__":
+    # Quick test
+    import sys
+    import argparse
+    from pathlib import Path
+    import unicorn
 
-    - **audio**: Audio file (mp3, wav, m4a, ogg, flac, webm, mp4)
-    """
-    _validate_audio(audio)
-    audio_bytes  = await audio.read()
-    context_info = extract_context_from_filename(audio.filename)
-
-    try:
-        transcript = transcribe_audio(audio_bytes, audio.filename)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
-
-    return JSONResponse({
-        "filename":      audio.filename,
-        "context_info":  context_info,
-        "transcription": transcript,
-    })
-
-
-@app.post("/process", tags=["HTTP"])
-async def process_call(audio: UploadFile = File(...)):
-    """
-    Full pipeline — HTTP version (no streaming, waits for complete result).
-
-    Prefer `/ws/process` for real-time progress updates.
-    """
-    _validate_audio(audio)
-
-    audio_bytes  = await audio.read()
-    filename     = audio.filename
-    context_info = extract_context_from_filename(filename)
-
-    try:
-        original_transcription = transcribe_audio(audio_bytes, filename)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}")
-
-    try:
-        arabic_refined = refine_arabic(original_transcription, context_info)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Arabic refinement failed: {exc}")
-
-    try:
-        english_refined = refine_english(original_transcription, context_info)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"English refinement failed: {exc}")
-
-    result = save_outputs(
-        filename=filename,
-        original_transcription=original_transcription,
-        arabic_refined=arabic_refined,
-        english_refined=english_refined,
-        context_info=context_info,
-    )
-    return JSONResponse(result)
-
-
-@app.get("/outputs/{output_filename}", tags=["Files"])
-async def download_output(output_filename: str):
-    """Download a previously generated output file by name."""
-    file_path = OUTPUT_DIR / output_filename
-    if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found.")
-    try:
-        file_path.resolve().relative_to(OUTPUT_DIR.resolve())
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied.")
-    media_type = "application/json" if output_filename.endswith(".json") else "text/plain"
-    return FileResponse(file_path, media_type=media_type, filename=output_filename)
-
-
-@app.get("/outputs", tags=["Files"])
-async def list_outputs():
-    """List all files currently in the output directory."""
-    files = [
-        {"name": f.name, "size_bytes": f.stat().st_size}
-        for f in sorted(OUTPUT_DIR.iterdir())
-        if f.is_file()
-    ]
-    return {"output_dir": str(OUTPUT_DIR), "files": files}
+    
+    if len(sys.argv) != 2:
+        print("Usage: python main.py <transcript.txt>")
+        sys.exit(1)
+    transcript = Path(sys.argv[1]).read_text(encoding="utf-8")
+    context = "Test call between customer and agent at Miraco Company."
+    for event in stream_pipeline(transcript, context):
+        print(event)

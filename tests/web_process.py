@@ -26,9 +26,9 @@ from typing import Any
 from fastapi import WebSocket
 
 from config import SUPPORTED_AUDIO_EXTENSIONS, extract_context_from_filename
-from transcriber import transcribe_audio
+from tests.transcriber import transcribe_audio
 from refiner import refine_arabic, refine_english
-from writer import save_outputs
+from tests.writer import save_outputs
 
 TOTAL_STEPS = 6
 
