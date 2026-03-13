@@ -18,7 +18,7 @@ transCallMapping/
 # transCallMapping
 
 > **Audio → Timestamped Transcript → Arabic + English refined versions**  
-> FastAPI service for ELAraby Group call-centre recordings.
+> FastAPI service for Miraco Company call-centre recordings.
 
 ---
 
@@ -111,8 +111,8 @@ curl -X POST http://localhost:8000/process \
   "context_info": "Call Date: 2024-03-15\nAgent ID: AGT001\nCustomer ID: CUST4892\nCall Topic / Notes: Washing Machine Complaint",
   "processed_at": "2024-03-15T10:30:00Z",
   "original_transcription": "[00:00:00.000] آلو، معاك خدمة عملاء العربي...",
-  "arabic_refined": "[00:00:00.000] Agent: أهلاً وسهلاً، معك خدمة عملاء العربي جروب...",
-  "english_refined": "[00:00:00.000] Agent: Hello, you've reached ELAraby Group customer service...",
+  "arabic_refined": "[00:00:00.000] Agent: أهلاً وسهلاً، معك خدمة عملاء شركة ميراكوا...",
+  "english_refined": "[00:00:00.000] Agent: Hello, you've reached Miraco Company customer service...",
   "output_files": {
     "original": "./outputs/20240315_..._original.txt",
     "arabic":   "./outputs/20240315_..._arabic.txt",

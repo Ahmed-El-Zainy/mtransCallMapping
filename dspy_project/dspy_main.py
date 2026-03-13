@@ -21,13 +21,19 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import AsyncGenerator
+from pathlib import Path
+import sys
+import os
+
+ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from refiner import run_pipeline, stream_pipeline
+from dspy_refiner import run_pipeline, stream_pipeline
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -61,7 +67,7 @@ class RefineRequest(BaseModel):
     transcript:   str = Field(
         ...,
         description = "Raw transcript text from the STT service.",
-        example     = "[00:00:01] ألو معك خدمه عملاء ميراكوا",
+        example     = "[00:00:01] ألو معك خدمه عملاء العربى",
     )
     context_info: str = Field(
         "",
@@ -309,13 +315,220 @@ async def ws_refine(websocket: WebSocket):
             pass
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# DSPy ENDPOINTS  —  /dspy/*
+# ══════════════════════════════════════════════════════════════════════════════
+
+from dspy_module.optimizer import (
+    optimize_program  as _dspy_optimize,
+    load_results      as _dspy_load_results,
+    get_best_compiled as _dspy_best_compiled,
+)
+from dspy_module.programs  import ArabicRefiner, EnglishRefiner, CallAnalyser
+from dspy_module.metrics   import arabic_metric, english_metric, analysis_metric
+from dspy_module.trainset  import get_arabic_trainset, get_english_trainset, get_analysis_trainset
+from dspy_module.optimizer import evaluate_program as _dspy_evaluate
+
+
+class DSPyOptimizeRequest(BaseModel):
+    program:    str = Field("arabic",    description="arabic | english | analysis | all")
+    optimizer:  str = Field("bootstrap", description="bootstrap | random_search | mipro")
+    demos:      int = Field(3,           description="Max bootstrapped demos (1-5)")
+    candidates: int = Field(8,           description="Candidate programs for random_search/mipro")
+
+
+# ── GET /dspy/status ──────────────────────────────────────────────────────────
+
+@app.get("/dspy/status", tags=["DSPy"])
+async def dspy_status():
+    """
+    Show which DSPy programs are active and whether compiled versions exist.
+    """
+    from dspy_module.lm_setup import configure_dspy
+    import dspy
+    configure_dspy()
+
+    programs = {}
+    for name in ["arabic", "english", "analysis"]:
+        best = _dspy_best_compiled(name)
+        from pathlib import Path
+        programs[name] = {
+            "compiled_exists": best is not None and Path(best).exists() if best else False,
+            "compiled_path":   best,
+        }
+
+    results = _dspy_load_results()
+    latest  = {}
+    for r in results:
+        prog = r.get("program")
+        if prog not in latest or r["timestamp"] > latest[prog]["timestamp"]:
+            latest[prog] = r
+
+    return {
+        "dspy_version": dspy.__version__,
+        "programs":     programs,
+        "latest_scores": {
+            prog: {
+                "before":      r.get("before",{}).get("avg_score"),
+                "after":       r.get("after", {}).get("avg_score"),
+                "improvement": r.get("improvement"),
+                "optimizer":   r.get("optimizer"),
+                "timestamp":   r.get("timestamp"),
+            }
+            for prog, r in latest.items()
+        },
+    }
+
+
+# ── POST /dspy/optimize ───────────────────────────────────────────────────────
+
+@app.post("/dspy/optimize", tags=["DSPy"])
+async def dspy_optimize(req: DSPyOptimizeRequest):
+    """
+    Run DSPy prompt optimization.
+
+    **What it does:**
+    1. Takes your training examples
+    2. Runs the selected optimizer (BootstrapFewShot / MIPROv2)
+    3. DSPy finds the best few-shot demos and/or instruction prefix
+    4. Saves the compiled program to `dspy_module/compiled/`
+    5. Returns before/after scores
+
+    **Optimizers:**
+    - `bootstrap` — Fast, no extra LLM calls for optimization itself
+    - `random_search` — Tries multiple random seeds, picks best (slower)
+    - `mipro` — Most powerful, generates candidate instructions (costs more)
+
+    ⚠️ Makes real Azure OpenAI API calls during optimization.
+    """
+    programs = ["arabic","english","analysis"] if req.program == "all" else [req.program]
+
+    results = {}
+    for prog in programs:
+        try:
+            result = await asyncio.to_thread(
+                _dspy_optimize,
+                program_name           = prog,
+                optimizer              = req.optimizer,
+                max_bootstrapped_demos = req.demos,
+                num_candidates         = req.candidates,
+                verbose                = False,
+            )
+            results[prog] = result
+        except Exception as exc:
+            results[prog] = {"error": str(exc)}
+
+    return {
+        "optimizer": req.optimizer,
+        "results":   results,
+        "summary": {
+            prog: {
+                "before":      r.get("before",{}).get("avg_score"),
+                "after":       r.get("after", {}).get("avg_score"),
+                "improvement": r.get("improvement"),
+            }
+            for prog, r in results.items() if "error" not in r
+        },
+    }
+
+
+# ── GET /dspy/results ─────────────────────────────────────────────────────────
+
+@app.get("/dspy/results", tags=["DSPy"])
+async def dspy_results():
+    """Return all DSPy optimization run history."""
+    results = _dspy_load_results()
+    if not results:
+        return {"message": "No optimization runs yet. POST /dspy/optimize to start.", "runs": []}
+    return {
+        "total_runs": len(results),
+        "runs": [
+            {
+                "program":     r.get("program"),
+                "optimizer":   r.get("optimizer"),
+                "timestamp":   r.get("timestamp"),
+                "before":      r.get("before",{}).get("avg_score"),
+                "after":       r.get("after", {}).get("avg_score"),
+                "improvement": r.get("improvement"),
+                "elapsed_s":   r.get("elapsed_s"),
+            }
+            for r in results
+        ],
+    }
+
+
+# ── POST /dspy/score ──────────────────────────────────────────────────────────
+
+class DSPyScoreRequest(BaseModel):
+    program:        str = Field(..., description="arabic | english | analysis")
+    raw_transcript: str = Field(..., description="Original input transcript")
+    output:         dict = Field(..., description="DSPy prediction output fields")
+
+
+@app.post("/dspy/score", tags=["DSPy"])
+async def dspy_score(req: DSPyScoreRequest):
+    """
+    Score a DSPy prediction using the built-in metrics.
+    No API calls — runs in milliseconds.
+    """
+    METRICS = {
+        "arabic":   arabic_metric,
+        "english":  english_metric,
+        "analysis": analysis_metric,
+    }
+    if req.program not in METRICS:
+        raise HTTPException(400, f"Unknown program. Choose: {list(METRICS)}")
+
+    metric_fn = METRICS[req.program]
+
+    # Build fake example + pred for the metric
+    class FakeEx:
+        def __init__(self, d): self.__dict__.update(d)
+    class FakePred:
+        def __init__(self, d): self.__dict__.update(d)
+
+    example = FakeEx({"raw_transcript": req.raw_transcript})
+    pred    = FakePred(req.output)
+    score   = metric_fn(example, pred)
+
+    return {
+        "program": req.program,
+        "score":   score,
+        "label":   "Good" if score >= 0.75 else "Needs improvement" if score >= 0.5 else "Poor",
+    }
+
+
+# ── POST /refine/dspy — use DSPy pipeline instead of raw LLM ─────────────────
+
+@app.post("/refine/dspy", tags=["DSPy"])
+async def refine_with_dspy(req: RefineRequest):
+    """
+    Run the pipeline using DSPy programs (compiled if available).
+
+    Same output contract as POST /refine but uses DSPy's
+    optimized prompts under the hood.
+
+    Check GET /dspy/status to see if compiled programs are active.
+    """
+    if not req.transcript.strip():
+        raise HTTPException(422, "transcript must not be empty.")
+
+    from app.dspy_refiner import run_pipeline as dspy_run
+    try:
+        result = await asyncio.to_thread(dspy_run, req.transcript, req.context_info)
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+    return JSONResponse(result)
+
+
 if __name__ == "__main__":
     # Quick test
     import sys
     import argparse
+    import uvicorn
     from pathlib import Path
 
-
+    uvicorn.run(app, host="0.0.0.0", port=8000)
     if len(sys.argv) != 2:
         print("Usage: python main.py <transcript.txt>")
         sys.exit(1)
@@ -323,3 +536,12 @@ if __name__ == "__main__":
     context = "Test call between customer and agent at Miraco Company."
     for event in stream_pipeline(transcript, context):
         print(event)
+
+
+    # uvicorn main:app --reload
+    # uvicorn main:app --reload --port 8000
+
+    # run dspy_main.py transcript through the DSPy pipeline and print the result:
+    # from app.dspy_refiner import run_pipeline
+    # result = run_pipeline("ألو معك خدمه عملاء العربى", "Call ID: C-001\nAgent Name: Ahmed Samir\nCall Date: 2024-03-15")
+    # print(result)

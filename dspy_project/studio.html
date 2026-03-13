@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>transCallMapping Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=IBM+Plex+Sans+Arabic:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06080b;
+  --surface:#0d1117;
+  --surface2:#131920;
+  --surface3:#192030;
+  --border:#1a2535;
+  --border2:#243040;
+  --accent:#e8f400;
+  --accent2:#b8c400;
+  --cyan:#00e5ff;
+  --green:#00e676;
+  --amber:#ffab00;
+  --red:#ff1744;
+  --purple:#d500f9;
+  --text:#dde6f0;
+  --text2:#6b8299;
+  --text3:#2a3d52;
+  --mono:'DM Mono',monospace;
+  --sans:'DM Sans',sans-serif;
+  --ar:'IBM Plex Sans Arabic',sans-serif;
+  --display:'Bebas Neue',sans-serif;
+  --r:4px;
+}
+
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+
+/* Grid noise texture */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:9998;opacity:.5}
+
+/* ── Top bar ── */
+.topbar{height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:0;position:sticky;top:0;z-index:200}
+.topbar-logo{font-family:var(--display);font-size:22px;letter-spacing:.04em;color:var(--accent);flex-shrink:0;margin-right:32px}
+.topbar-logo span{color:var(--text2)}
+
+/* Nav pills */
+.nav{display:flex;gap:2px}
+.nav-item{padding:6px 14px;border-radius:var(--r);font-size:12px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;font-family:var(--mono);border:1px solid transparent}
+.nav-item:hover{color:var(--text);background:var(--surface2)}
+.nav-item.active{color:var(--bg);background:var(--accent);border-color:var(--accent)}
+.nav-item .nav-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.health-pill{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text2);padding:4px 10px;border-radius:20px;border:1px solid var(--border)}
+.hdot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.hdot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.hdot.err{background:var(--red);box-shadow:0 0 6px var(--red)}
+.base-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;padding:5px 9px;outline:none;width:220px}
+.base-input:focus{border-color:var(--accent)}
+
+/* ── Page container ── */
+.pages{height:calc(100vh - 48px);overflow:hidden}
+.page{display:none;height:100%;overflow:hidden}
+.page.active{display:flex;flex-direction:column}
+
+/* ── 2-col layout ── */
+.two-col{display:grid;grid-template-columns:320px 1fr;height:100%;overflow:hidden}
+.left-col{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.right-col{display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Section blocks ── */
+.sec{padding:16px 18px;border-bottom:1px solid var(--border)}
+.sec:last-child{border-bottom:none}
+.sec-label{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+
+/* ── Form elements ── */
+.field{margin-bottom:9px}
+.field label{display:block;font-size:10px;color:var(--text2);margin-bottom:4px;font-family:var(--mono);letter-spacing:.04em}
+input[type=url],input[type=text],select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--mono);font-size:11px;padding:7px 9px;outline:none;transition:border-color .2s}
+input:focus,select:focus{border-color:var(--accent)}
+textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-size:12px;padding:10px;outline:none;resize:vertical;transition:border-color .2s;line-height:1.6}
+textarea:focus{border-color:var(--accent)}
+textarea::placeholder{color:var(--text3)}
+.ta-ar{font-family:var(--ar);font-size:13px}
+.ta-mono{font-family:var(--mono);font-size:11px}
+
+/* ── Mode tabs ── */
+.mode-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.mtab{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text2);font-family:var(--mono);font-size:10px;padding:7px 4px;cursor:pointer;text-align:center;transition:all .15s}
+.mtab:hover{border-color:var(--border2);color:var(--text)}
+.mtab.active{background:rgba(232,244,0,.08);border-color:var(--accent);color:var(--accent)}
+
+/* ── Buttons ── */
+.btn-primary{width:100%;background:var(--accent);border:none;border-radius:var(--r);color:var(--bg);font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.08em;padding:10px;cursor:pointer;transition:all .2s;text-transform:uppercase;margin-top:10px}
+.btn-primary:hover{background:#f5ff33;box-shadow:0 0 20px rgba(232,244,0,.25)}
+.btn-primary:disabled{background:var(--border2);color:var(--text3);cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r);color:var(--text2);font-family:var(--mono);font-size:10px;padding:7px 12px;cursor:pointer;transition:all .2s;letter-spacing:.05em;text-transform:uppercase}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-accent{background:rgba(0,229,255,.1);border:1px solid var(--cyan);border-radius:var(--r);color:var(--cyan);font-family:var(--mono);font-size:10px;padding:7px 12px;cursor:pointer;transition:all .2s;letter-spacing:.05em;text-transform:uppercase}
+.btn-accent:hover{background:rgba(0,229,255,.2)}
+.btn-danger{background:rgba(255,23,68,.08);border:1px solid rgba(255,23,68,.3);border-radius:var(--r);color:var(--red);font-family:var(--mono);font-size:10px;padding:7px 12px;cursor:pointer;transition:all .2s}
+
+/* ── Result tabs bar ── */
+.tabs-bar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 18px;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
+.tabs-bar::-webkit-scrollbar{display:none}
+.rtab{padding:11px 13px 9px;font-size:10px;font-weight:500;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.rtab:hover{color:var(--text2)}
+.rtab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.rbadge{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--text3)}
+.rtab.active .rbadge{color:var(--accent);border-color:var(--accent)}
+
+/* ── Results pane ── */
+.rpane{flex:1;overflow-y:auto;padding:20px 22px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.rpane::-webkit-scrollbar{width:4px}
+.rpane::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Panels ── */
+.panel{display:none}
+.panel.active{display:block;animation:fadeIn .2s ease}
+
+/* ── Empty states ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52vh;gap:10px;color:var(--text3);text-align:center}
+.empty-icon{font-size:36px;opacity:.25;margin-bottom:4px}
+.empty h3{font-family:var(--display);font-size:20px;letter-spacing:.06em;color:var(--text2)}
+.empty p{font-size:11px;max-width:260px}
+
+/* ── Progress steps ── */
+.progress-strip{background:var(--surface);border-bottom:1px solid var(--border);padding:9px 20px;display:none;flex-shrink:0}
+.progress-strip.show{display:block}
+.psteps{display:flex;align-items:center}
+.pstep{display:flex;align-items:center;gap:6px;font-size:10px;font-family:var(--mono);color:var(--text3);transition:color .3s}
+.pstep.active{color:var(--cyan)}
+.pstep.done{color:var(--green)}
+.pnum{width:18px;height:18px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0;transition:all .3s}
+.pstep.active .pnum{background:rgba(0,229,255,.12);border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 8px rgba(0,229,255,.3)}
+.pstep.done .pnum{background:rgba(0,230,118,.1);border-color:var(--green);color:var(--green)}
+.pconn{flex:1;height:1px;background:var(--border);margin:0 6px;max-width:32px}
+
+/* ── Transcript blocks ── */
+.tx-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;white-space:pre-wrap;word-break:break-word;line-height:1.8}
+.tx-block.arabic{border-left:2px solid var(--amber);font-family:var(--ar);font-size:13px}
+.tx-block.english{border-left:2px solid var(--cyan);font-family:var(--mono);font-size:12px}
+.tx-block b{color:var(--accent);font-weight:600}
+.block-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.block-title{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+.copy-btn{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text2);font-family:var(--mono);font-size:9px;padding:3px 8px;cursor:pointer;transition:all .2s}
+.copy-btn:hover{border-color:var(--accent);color:var(--accent)}
+.copy-btn.ok{color:var(--green);border-color:var(--green)}
+
+/* ── Analysis cards ── */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.cards.full{grid-template-columns:1fr}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px;transition:border-color .2s}
+.card:hover{border-color:var(--border2)}
+.clbl{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.cval{font-size:13px;color:var(--text);line-height:1.5}
+.cval.sm{font-size:11px;font-family:var(--mono)}
+.tag-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.tag{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-size:10px;color:var(--text2);font-family:var(--mono)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:4px;border-radius:3px;padding:3px 8px;font-size:10px;font-weight:600;font-family:var(--mono);letter-spacing:.05em}
+.bg-green{background:rgba(0,230,118,.1);color:var(--green);border:1px solid rgba(0,230,118,.25)}
+.bg-amber{background:rgba(255,171,0,.1);color:var(--amber);border:1px solid rgba(255,171,0,.25)}
+.bg-red{background:rgba(255,23,68,.1);color:var(--red);border:1px solid rgba(255,23,68,.25)}
+.bg-cyan{background:rgba(0,229,255,.1);color:var(--cyan);border:1px solid rgba(0,229,255,.25)}
+.bg-purple{background:rgba(213,0,249,.1);color:var(--purple);border:1px solid rgba(213,0,249,.25)}
+
+/* ── Score panel ── */
+.score-hero{display:flex;align-items:center;gap:20px;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px}
+.score-ring{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.score-inner{width:56px;height:56px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:20px}
+.score-meta h3{font-family:var(--display);font-size:18px;letter-spacing:.04em;margin-bottom:3px}
+.score-meta p{font-size:11px;color:var(--text2)}
+.sbar-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.sbar{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;max-width:180px}
+.sbar-fill{height:100%;border-radius:2px;transition:width .6s ease}
+
+.score-tbl{width:100%;border-collapse:collapse}
+.score-tbl th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface)}
+.score-tbl td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;vertical-align:top}
+.score-tbl tr:last-child td{border-bottom:none}
+.score-tbl tr:hover td{background:var(--surface2)}
+.q-name{color:var(--text);font-weight:500}
+.q-note{color:var(--text2);font-size:10px;margin-top:2px}
+.pass{color:var(--green);font-family:var(--mono);font-size:10px;font-weight:600}
+.fail{color:var(--red);font-family:var(--mono);font-size:10px;font-weight:600}
+
+/* ── Raw JSON ── */
+.json-view{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;font-family:var(--mono);font-size:11px;line-height:1.7;overflow-x:auto;white-space:pre;color:var(--text2)}
+.jk{color:#79c0ff}.js{color:#a5d6ff}.jn{color:#ffab70}.jb{color:#ff7b72}.jnu{color:var(--text3)}
+
+/* ── DSPy page ── */
+.dspy-grid{display:grid;grid-template-columns:300px 1fr;height:100%;overflow:hidden}
+.dspy-left{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:20px}
+.dspy-right{overflow-y:auto;padding:22px 24px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+
+.dspy-section{margin-bottom:24px}
+.dspy-section h3{font-family:var(--display);font-size:16px;letter-spacing:.06em;color:var(--accent);margin-bottom:4px}
+.dspy-section p{font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:12px}
+
+.optimizer-cards{display:grid;gap:6px;margin-bottom:14px}
+.opt-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;cursor:pointer;transition:all .2s}
+.opt-card:hover{border-color:var(--border2)}
+.opt-card.selected{background:rgba(232,244,0,.06);border-color:var(--accent)}
+.opt-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.opt-name{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--text)}
+.opt-card.selected .opt-name{color:var(--accent)}
+.opt-speed{font-size:9px;font-family:var(--mono);padding:2px 6px;border-radius:3px;background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+.opt-desc{font-size:10px;color:var(--text2)}
+
+.program-checks{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.prog-check{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r);background:var(--surface2);border:1px solid var(--border);cursor:pointer;transition:all .2s}
+.prog-check:hover{border-color:var(--border2)}
+.prog-check.selected{border-color:var(--accent);background:rgba(232,244,0,.04)}
+.prog-check-box{width:14px;height:14px;border-radius:2px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:9px;transition:all .2s}
+.prog-check.selected .prog-check-box{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.prog-label{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.prog-check.selected .prog-label{color:var(--text)}
+
+/* Results table */
+.results-tbl{width:100%;border-collapse:collapse}
+.results-tbl th{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface)}
+.results-tbl td{padding:9px 10px;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--mono)}
+.results-tbl tr:hover td{background:var(--surface2)}
+.improvement-pos{color:var(--green)}
+.improvement-neg{color:var(--red)}
+.improvement-neu{color:var(--text2)}
+
+/* Score sparkbar */
+.spark{display:flex;align-items:center;gap:6px}
+.spark-bar{width:80px;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.spark-fill{height:100%;border-radius:2px}
+.spark-num{font-size:11px;font-weight:500}
+
+/* Optimization log */
+.opt-log{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;max-height:200px;overflow-y:auto;margin-top:12px;display:none}
+.opt-log.show{display:block}
+.log-ok{color:var(--green)}
+.log-warn{color:var(--amber)}
+.log-err{color:var(--red)}
+.log-dim{color:var(--text2)}
+
+/* Status cards */
+.status-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.status-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.status-card-name{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+.status-indicator{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.status-dot.compiled{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-dot.uncompiled{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.status-label{font-size:11px;font-weight:500}
+.status-score{font-family:var(--display);font-size:22px;letter-spacing:.04em;margin-top:4px}
+
+/* Error */
+.err-box{background:rgba(255,23,68,.06);border:1px solid rgba(255,23,68,.25);border-radius:var(--r);padding:12px 14px;color:var(--red);font-family:var(--mono);font-size:11px;white-space:pre-wrap;line-height:1.6}
+
+/* Streaming cursor */
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.cur{display:inline-block;color:var(--accent);animation:blink .8s step-end infinite;font-weight:bold}
+
+/* Spinner */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.spinner{width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:6px}
+
+.char-meta{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:4px}
+
+@media(max-width:880px){
+  .two-col,.dspy-grid{grid-template-columns:1fr;overflow:auto}
+  .left-col,.dspy-left{max-height:50vh;border-right:none;border-bottom:1px solid var(--border)}
+  .cards,.status-cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ TOP BAR ══ -->
+<div class="topbar">
+  <div class="topbar-logo">TCM<span>.</span>STUDIO</div>
+  <nav class="nav">
+    <div class="nav-item active" onclick="goto('app')" id="nav-app"><span class="nav-dot"></span>App Tester</div>
+    <div class="nav-item" onclick="goto('dspy')" id="nav-dspy"><span class="nav-dot"></span>DSPy Lab</div>
+    <div class="nav-item" onclick="goto('prompts')" id="nav-prompts"><span class="nav-dot"></span>Prompts</div>
+  </nav>
+  <div class="topbar-right">
+    <div class="health-pill"><div class="hdot" id="hdot"></div><span id="htext">checking</span></div>
+    <input class="base-input" id="base-url" value="http://localhost:8000" placeholder="API base URL"/>
+  </div>
+</div>
+
+<div class="pages">
+
+<!-- ════════════════════════════════════════════════════
+     PAGE 1 — APP TESTER
+     ════════════════════════════════════════════════════ -->
+<div class="page active" id="page-app">
+<div class="two-col">
+
+  <!-- Left -->
+  <div class="left-col">
+    <div class="sec">
+      <div class="sec-label">Mode</div>
+      <div class="mode-row">
+        <div class="mtab active" data-mode="http" onclick="setMode('http')">HTTP</div>
+        <div class="mtab" data-mode="sse"  onclick="setMode('sse')">SSE Stream</div>
+        <div class="mtab" data-mode="ws"   onclick="setMode('ws')">WebSocket</div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="mtab" id="dspy-mode-btn" style="width:100%;background:rgba(232,244,0,.06);border-color:rgba(232,244,0,.3);color:rgba(232,244,0,.7);font-size:10px" onclick="setMode('dspy')">⚡ Use DSPy Compiled</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">Context Info <span style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <textarea id="ctx" class="ta-mono" style="height:72px" placeholder="Call ID: C-001&#10;Agent Name: Ahmed Samir&#10;Call Date: 2024-03-15&#10;Call Type: Inbound"></textarea>
+    </div>
+
+    <div class="sec" style="flex:1;display:flex;flex-direction:column">
+      <div class="sec-label">Raw Transcript</div>
+      <textarea id="transcript" class="ta-ar" style="flex:1;min-height:180px" oninput="updateCount()" placeholder="Paste raw transcript from STT API…&#10;&#10;مساء الخدمة اللي اكون هام مع حضرتك..."></textarea>
+      <div class="char-meta"><span id="ccount">0 chars</span><span id="lcount">0 lines</span></div>
+      <button class="btn-primary" id="run-btn" onclick="runApp()">▶ Run Pipeline</button>
+    </div>
+  </div>
+
+  <!-- Right -->
+  <div class="right-col">
+    <div class="progress-strip" id="pstrip">
+      <div class="psteps">
+        <div class="pstep" id="ps1"><div class="pnum">1</div><span>Arabic</span></div>
+        <div class="pconn"></div>
+        <div class="pstep" id="ps2"><div class="pnum">2</div><span>English</span></div>
+        <div class="pconn"></div>
+        <div class="pstep" id="ps3"><div class="pnum">3</div><span>Analysis</span></div>
+      </div>
+    </div>
+
+    <div class="tabs-bar">
+      <div class="rtab active" onclick="switchTab('arabic')"  id="tab-arabic">🇦🇪 Arabic  <span class="rbadge" id="b-arabic">—</span></div>
+      <div class="rtab"        onclick="switchTab('english')" id="tab-english">🇬🇧 English <span class="rbadge" id="b-english">—</span></div>
+      <div class="rtab"        onclick="switchTab('analysis')" id="tab-analysis">📋 Analysis <span class="rbadge" id="b-analysis">—</span></div>
+      <div class="rtab"        onclick="switchTab('score')"   id="tab-score">🎯 Score <span class="rbadge" id="b-score">—</span></div>
+      <div class="rtab"        onclick="switchTab('raw')"     id="tab-raw">{ } JSON <span class="rbadge" id="b-raw">—</span></div>
+    </div>
+
+    <div class="rpane">
+
+      <!-- Arabic -->
+      <div class="panel active" id="panel-arabic">
+        <div class="empty" id="e-arabic"><div class="empty-icon">🇦🇪</div><h3>ARABIC TRANSCRIPT</h3><p>Submit a transcript to see the cleaned Egyptian-Arabic version</p></div>
+        <div id="c-arabic" style="display:none">
+          <div class="block-hdr"><div class="block-title">Refined · Egyptian Arabic</div><button class="copy-btn" onclick="cp('ar-text',this)">Copy</button></div>
+          <div class="tx-block arabic" id="ar-text" dir="rtl"></div>
+        </div>
+      </div>
+
+      <!-- English -->
+      <div class="panel" id="panel-english">
+        <div class="empty" id="e-english"><div class="empty-icon">🇬🇧</div><h3>ENGLISH TRANSCRIPT</h3><p>Submit a transcript to see the professional English version</p></div>
+        <div id="c-english" style="display:none">
+          <div class="block-hdr"><div class="block-title">Refined · Professional English</div><button class="copy-btn" onclick="cp('en-text',this)">Copy</button></div>
+          <div class="tx-block english" id="en-text"></div>
+        </div>
+      </div>
+
+      <!-- Analysis -->
+      <div class="panel" id="panel-analysis">
+        <div class="empty" id="e-analysis"><div class="empty-icon">📋</div><h3>CALL ANALYSIS</h3><p>Submit a transcript to see the full call analysis</p></div>
+        <div id="c-analysis" style="display:none"></div>
+      </div>
+
+      <!-- Score -->
+      <div class="panel" id="panel-score">
+        <div class="empty" id="e-score"><div class="empty-icon">🎯</div><h3>CALL SCORE</h3><p>Submit a transcript to see the quality score breakdown</p></div>
+        <div id="c-score" style="display:none"></div>
+      </div>
+
+      <!-- Raw -->
+      <div class="panel" id="panel-raw">
+        <div class="empty" id="e-raw"><div class="empty-icon">{ }</div><h3>RAW JSON</h3><p>Full API response will appear here</p></div>
+        <div id="c-raw" style="display:none">
+          <div class="block-hdr"><div class="block-title">Full API Response</div><button class="copy-btn" onclick="cp('jv',this)">Copy</button></div>
+          <div class="json-view" id="jv"></div>
+        </div>
+      </div>
+
+    </div><!-- /rpane -->
+  </div><!-- /right-col -->
+</div><!-- /two-col -->
+</div><!-- /page-app -->
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE 2 — DSPy LAB
+     ════════════════════════════════════════════════════ -->
+<div class="page" id="page-dspy">
+<div class="dspy-grid">
+
+  <!-- Left controls -->
+  <div class="dspy-left">
+
+    <div class="dspy-section">
+      <h3>Optimizer</h3>
+      <p>Choose how DSPy will search for better prompts</p>
+      <div class="optimizer-cards">
+        <div class="opt-card selected" onclick="selOpt('bootstrap')" id="oc-bootstrap">
+          <div class="opt-card-header"><span class="opt-name">Bootstrap</span><span class="opt-speed" style="color:var(--green)">Fast</span></div>
+          <div class="opt-desc">Bootstraps few-shot demos from training examples. No extra LLM calls for optimization itself.</div>
+        </div>
+        <div class="opt-card" onclick="selOpt('random_search')" id="oc-random_search">
+          <div class="opt-card-header"><span class="opt-name">Random Search</span><span class="opt-speed" style="color:var(--amber)">Medium</span></div>
+          <div class="opt-desc">Tries multiple random seeds and picks the best combination of demos.</div>
+        </div>
+        <div class="opt-card" onclick="selOpt('mipro')" id="oc-mipro">
+          <div class="opt-card-header"><span class="opt-name">MIPROv2</span><span class="opt-speed" style="color:var(--red)">Powerful</span></div>
+          <div class="opt-desc">Generates candidate instruction prefixes + demos. Best quality, higher cost.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dspy-section">
+      <h3>Programs</h3>
+      <p>Select which programs to optimize</p>
+      <div class="program-checks">
+        <div class="prog-check selected" onclick="togProg('arabic')"  id="pc-arabic"><div class="prog-check-box" id="pb-arabic">✓</div><span class="prog-label">Arabic Refiner</span></div>
+        <div class="prog-check selected" onclick="togProg('english')" id="pc-english"><div class="prog-check-box" id="pb-english">✓</div><span class="prog-label">English Refiner</span></div>
+        <div class="prog-check selected" onclick="togProg('analysis')" id="pc-analysis"><div class="prog-check-box" id="pb-analysis">✓</div><span class="prog-label">Call Analyser</span></div>
+      </div>
+    </div>
+
+    <div class="dspy-section">
+      <h3>Settings</h3>
+      <div class="field"><label>Max Demos</label>
+        <select id="dspy-demos"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
+      </div>
+      <div class="field"><label>Candidates (random/mipro)</label>
+        <select id="dspy-candidates"><option value="4">4</option><option value="8" selected>8</option><option value="12">12</option><option value="16">16</option></select>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="dspy-run-btn" onclick="runDspy()" style="margin-top:0">▶ Run Optimization</button>
+    <button class="btn-secondary" onclick="loadDspyStatus()" style="width:100%;margin-top:6px">↻ Refresh Status</button>
+  </div>
+
+  <!-- Right results -->
+  <div class="dspy-right">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div style="font-family:var(--display);font-size:24px;letter-spacing:.06em">DSPy <span style="color:var(--accent)">Lab</span></div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">Automated prompt optimization — compile once, run forever</div>
+      </div>
+    </div>
+
+    <!-- Status cards -->
+    <div class="status-cards" id="dspy-status-cards">
+      <div class="status-card"><div class="status-card-name">Arabic Refiner</div><div class="status-indicator"><div class="status-dot uncompiled" id="sd-arabic"></div><span class="status-label" id="sl-arabic">Not compiled</span></div><div class="status-score" id="ss-arabic" style="color:var(--text2)">—</div></div>
+      <div class="status-card"><div class="status-card-name">English Refiner</div><div class="status-indicator"><div class="status-dot uncompiled" id="sd-english"></div><span class="status-label" id="sl-english">Not compiled</span></div><div class="status-score" id="ss-english" style="color:var(--text2)">—</div></div>
+      <div class="status-card"><div class="status-card-name">Call Analyser</div><div class="status-indicator"><div class="status-dot uncompiled" id="sd-analysis"></div><span class="status-label" id="sl-analysis">Not compiled</span></div><div class="status-score" id="ss-analysis" style="color:var(--text2)">—</div></div>
+    </div>
+
+    <!-- Optimization log -->
+    <div class="opt-log" id="opt-log"></div>
+
+    <!-- Results history -->
+    <div style="font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin:16px 0 8px">Optimization History</div>
+    <div id="dspy-history">
+      <div class="empty" style="min-height:200px"><div class="empty-icon">⚡</div><h3>NO RUNS YET</h3><p>Run optimization to see before/after scores</p></div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════
+     PAGE 3 — PROMPTS VIEWER
+     ════════════════════════════════════════════════════ -->
+<div class="page" id="page-prompts">
+<div class="two-col">
+
+  <div class="left-col">
+    <div class="sec">
+      <div class="sec-label">Section</div>
+      <div class="mode-row">
+        <div class="mtab active" onclick="selPromptSec('arabic')" id="pt-arabic">Arabic</div>
+        <div class="mtab" onclick="selPromptSec('english')" id="pt-english">English</div>
+        <div class="mtab" onclick="selPromptSec('analysis')" id="pt-analysis">Analysis</div>
+      </div>
+    </div>
+    <div class="sec" style="flex:1">
+      <div class="sec-label">Quick Score</div>
+      <div class="field"><label>Original Transcript</label>
+        <textarea id="qs-original" class="ta-ar" style="height:100px" placeholder="Paste original transcript…"></textarea>
+      </div>
+      <div class="field"><label>Output to Score</label>
+        <textarea id="qs-output" class="ta-ar" style="height:100px" placeholder="Paste LLM output…"></textarea>
+      </div>
+      <button class="btn-accent" onclick="quickScore()" style="width:100%;margin-top:4px">⚡ Score Instantly</button>
+      <div id="qs-result" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="tabs-bar">
+      <div class="rtab active" onclick="switchPromptTab('signature')" id="ptab-signature">Signature</div>
+      <div class="rtab" onclick="switchPromptTab('compiled')" id="ptab-compiled">Compiled Prompt</div>
+      <div class="rtab" onclick="switchPromptTab('metric')" id="ptab-metric">Metric Docs</div>
+    </div>
+    <div class="rpane" id="prompts-rpane">
+      <div id="pp-signature" class="panel active"></div>
+      <div id="pp-compiled"  class="panel"></div>
+      <div id="pp-metric"    class="panel"></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</div><!-- /pages -->
+
+<script>
+// ════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════
+let appMode        = 'http';
+let activeTab      = 'arabic';
+let dspyOptimizer  = 'bootstrap';
+let dspyPrograms   = new Set(['arabic','english','analysis']);
+let promptSection  = 'arabic';
+let promptTab      = 'signature';
+let streaming      = {arabic:'',english:'',analysis:''};
+let ws             = null;
+
+const B = () => document.getElementById('base-url').value.trim();
+
+// ════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════
+function goto(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
+  if (page==='dspy')    loadDspyStatus();
+  if (page==='prompts') renderPromptPage();
+}
+
+// ════════════════════════════════════════════════════
+// HEALTH
+// ════════════════════════════════════════════════════
+async function checkHealth() {
+  const dot=document.getElementById('hdot'), txt=document.getElementById('htext');
+  try {
+    const r=await fetch(`${B()}/health`,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){dot.className='hdot ok';txt.textContent='online';}
+    else     {dot.className='hdot err';txt.textContent=`HTTP ${r.status}`;}
+  } catch { dot.className='hdot err'; txt.textContent='unreachable'; }
+}
+checkHealth(); setInterval(checkHealth,10000);
+
+// ════════════════════════════════════════════════════
+// APP TESTER
+// ════════════════════════════════════════════════════
+function setMode(m) {
+  appMode=m;
+  document.querySelectorAll('.mtab[data-mode]').forEach(t=>t.classList.toggle('active',t.dataset.mode===m));
+  const db=document.getElementById('dspy-mode-btn');
+  if(m==='dspy') db.style.borderColor='var(--accent)';
+  else db.style.borderColor='rgba(232,244,0,.3)';
+}
+
+function updateCount() {
+  const v=document.getElementById('transcript').value;
+  document.getElementById('ccount').textContent=v.length.toLocaleString()+' chars';
+  document.getElementById('lcount').textContent=v.split('\n').filter(l=>l.trim()).length+' lines';
+}
+
+function switchTab(name) {
+  activeTab=name;
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+async function runApp() {
+  const t=document.getElementById('transcript').value.trim();
+  if(!t){alert('Paste a transcript first.');return;}
+  streaming={arabic:'',english:'',analysis:''};
+  clearResults(); showProgress(); setRunning(true);
+  if(appMode==='ws')   runWS(t);
+  else if(appMode==='sse') runSSE(t);
+  else runHTTP(t);
+}
+
+// ── HTTP ──
+async function runHTTP(transcript) {
+  const ctx=document.getElementById('ctx').value.trim();
+  const endpoint = appMode==='dspy' ? '/refine/dspy' : '/refine';
+  try {
+    for(let i=1;i<=3;i++){setStep(i,'active');await sleep(250);}
+    const r=await fetch(`${B()}${endpoint}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript,context_info:ctx})});
+    if(!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    renderAll(await r.json()); markDone();
+  } catch(e){renderErr(e.message);}
+  finally{setRunning(false);}
+}
+
+// ── SSE ──
+async function runSSE(transcript) {
+  const ctx=document.getElementById('ctx').value.trim();
+  try {
+    const r=await fetch(`${B()}/refine/stream`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transcript,context_info:ctx})});
+    if(!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
+    while(true) {
+      const{done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n'); buf=lines.pop();
+      for(const line of lines) {
+        if(!line.startsWith('data: ')) continue;
+        const p=line.slice(6).trim();
+        if(p==='[DONE]'){setRunning(false);break;}
+        try{handleEvent(JSON.parse(p));}catch(e){}
+      }
+    }
+  } catch(e){if(e.name!=='AbortError')renderErr(e.message);}
+  finally{setRunning(false);}
+}
+
+// ── WS ──
+function runWS(transcript) {
+  const ctx=document.getElementById('ctx').value.trim();
+  const url=B().replace(/^http/,'ws')+'/ws/refine';
+  if(ws){try{ws.close();}catch(e){}}
+  ws=new WebSocket(url);
+  ws.onopen=()=>ws.send(JSON.stringify({transcript,context_info:ctx}));
+  ws.onmessage=(e)=>{try{handleEvent(JSON.parse(e.data));}catch(ex){}};
+  ws.onerror=()=>{renderErr('WebSocket failed');setRunning(false);};
+  ws.onclose=()=>setRunning(false);
+}
+
+// ── Shared event handler ──
+const STEP_MAP={arabic:1,english:2,analysis:3};
+function handleEvent(msg) {
+  switch(msg.event) {
+    case 'start':
+      setStep(STEP_MAP[msg.section]||1,'active');
+      prepStream(msg.section);
+      switchTab(msg.section==='analysis'?'analysis':msg.section);
+      break;
+    case 'token':
+      streaming[msg.section]=(streaming[msg.section]||'')+msg.token;
+      appendTok(msg.section,msg.token);
+      break;
+    case 'section_done':
+      setStep(STEP_MAP[msg.section]||1,'done');
+      if(msg.section!=='analysis') setBadge(msg.section,lc(streaming[msg.section])+'L');
+      else setBadge('analysis','done');
+      break;
+    case 'done':
+      renderAll(msg); markDone(); setRunning(false);
+      if(ws){try{ws.close();}catch(e){}}
+      break;
+    case 'error':
+      renderErr(msg.message); setRunning(false);
+      break;
+  }
+}
+
+function prepStream(section) {
+  if(section==='analysis') {
+    show('e-analysis',false); show('c-analysis',true);
+    let box=document.getElementById('as-stream');
+    if(!box){box=document.createElement('div');box.id='as-stream';box.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;font-family:var(--mono);font-size:10px;line-height:1.7;color:var(--text2);white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto';document.getElementById('c-analysis').innerHTML='';document.getElementById('c-analysis').appendChild(box);}
+    box.textContent='';
+    return;
+  }
+  show('e-'+section,false); show('c-'+section,true);
+  const el=document.getElementById(section==='arabic'?'ar-text':'en-text');
+  el.innerHTML='<span class="cur">▋</span>';
+}
+
+function appendTok(section,token) {
+  if(section==='analysis'){const b=document.getElementById('as-stream');if(b){b.textContent+=token;b.scrollTop=b.scrollHeight;}return;}
+  const el=document.getElementById(section==='arabic'?'ar-text':'en-text');
+  if(!el) return;
+  el.innerHTML=el.innerHTML.replace('<span class="cur">▋</span>','');
+  el.innerHTML+=esc(token).replace(/(Agent:|Customer:)/g,'<b>$1</b>')+'<span class="cur">▋</span>';
+  el.scrollTop=el.scrollHeight;
+}
+
+// ── Render results ──
+function renderAll(data) {
+  document.getElementById('as-stream')?.remove();
+  ['arabic','english'].forEach(s=>{const el=document.getElementById(s==='arabic'?'ar-text':'en-text');if(el)el.innerHTML=el.innerHTML.replace(/<span class="cur">▋<\/span>/g,'');});
+  if(data.transcript_arabic)  renderTx('arabic',  data.transcript_arabic);
+  if(data.transcript_english) renderTx('english', data.transcript_english);
+  renderAnalysis(data);
+  renderScore(data);
+  renderRaw(data);
+  setBadge('arabic',  lc(data.transcript_arabic)+'L');
+  setBadge('english', lc(data.transcript_english)+'L');
+  setBadge('analysis','done');
+  setBadge('score',   (data.call_score??'—')+(data.call_score!=null?'%':''));
+  setBadge('raw','JSON');
+}
+
+function renderTx(lang,text) {
+  show('e-'+lang,false); show('c-'+lang,true);
+  const el=document.getElementById(lang==='arabic'?'ar-text':'en-text');
+  el.innerHTML=esc(text).replace(/(Agent:|Customer:)/g,'<b>$1</b>');
+}
+
+function renderAnalysis(d) {
+  show('e-analysis',false); show('c-analysis',true);
+  const oc=outcomeBadge(d.call_outcome);
+  const ab=attBadge(d.agent_attitude);
+  const sb=satBadge(d.customer_satisfaction);
+  const kw=(d.keywords||[]).map(k=>`<span class="tag">${esc(k)}</span>`).join('')||'<span style="color:var(--text3)">None</span>';
+  document.getElementById('c-analysis').innerHTML=`
+    <div class="cards full" style="margin-bottom:8px"><div class="card"><div class="clbl">📌 Main Subject</div><div class="cval">${esc(d.main_subject||'—')}</div></div></div>
+    <div class="cards" style="margin-bottom:8px">
+      <div class="card"><div class="clbl">🏁 Call Outcome</div><div class="cval">${oc}</div></div>
+      <div class="card"><div class="clbl">🌐 Language</div><div class="cval"><span class="badge bg-purple">${esc(d.language||'—')}</span></div></div>
+    </div>
+    <div class="cards full" style="margin-bottom:8px"><div class="card"><div class="clbl">✅ Issue Resolution</div><div class="cval sm" style="color:var(--text2)">${esc(d.issue_resolution||'—')}</div></div></div>
+    <div class="cards full" style="margin-bottom:8px"><div class="card"><div class="clbl">📝 Call Summary</div><div class="cval sm" style="color:var(--text2)">${esc(d.call_summary||'—')}</div></div></div>
+    <div class="cards" style="margin-bottom:8px">
+      <div class="card"><div class="clbl">🔑 Keywords</div><div class="tag-row">${kw}</div></div>
+      <div class="card"><div class="clbl">🗂 Category</div><div class="cval"><span class="badge bg-cyan">${esc(d.call_category||'—')}</span></div></div>
+    </div>
+    <div class="cards" style="margin-bottom:8px">
+      <div class="card"><div class="clbl">🔧 Service</div><div class="cval sm">${esc(d.service||'—')}</div></div>
+      <div class="card"><div class="clbl">💼 Agent Attitude</div><div class="cval">${ab}</div></div>
+    </div>
+    <div class="cards full"><div class="card"><div class="clbl">😊 Customer Satisfaction</div><div class="cval">${sb}</div></div></div>`;
+}
+
+function renderScore(d) {
+  show('e-score',false); show('c-score',true);
+  const score=d.call_score??0;
+  const bd=d.score_breakdown||{};
+  const passed=Object.values(bd).filter(q=>q.result==='Pass').length;
+  const total=Object.keys(bd).length||7;
+  const sc=score>=75?'var(--green)':score>=50?'var(--amber)':'var(--red)';
+  const verdict=score>=75?'Good quality call ✓':score>=50?'Needs improvement':'Poor quality — review required';
+  const LABELS={greeted_professionally:'Greeted professionally',identified_customer_need:'Identified customer need',provided_accurate_info:'Provided accurate information',maintained_professional_tone:'Maintained professional tone',offered_complete_solution:'Offered complete solution',confirmed_resolution:'Confirmed resolution',proper_closing:'Proper call closing'};
+  const rows=Object.entries(bd).map(([k,v])=>`<tr><td><div class="q-name">${LABELS[k]||k}</div><div class="q-note">${esc(v.note||'')}</div></td><td style="text-align:center;width:70px"><span class="${v.result==='Pass'?'pass':'fail'}">${v.result==='Pass'?'✓ PASS':'✗ FAIL'}</span></td></tr>`).join('');
+  document.getElementById('c-score').innerHTML=`
+    <div class="score-hero">
+      <div class="score-ring" style="background:conic-gradient(${sc} ${score*3.6}deg,var(--surface2) 0)">
+        <div class="score-inner" style="color:${sc}">${score}</div>
+      </div>
+      <div class="score-meta">
+        <h3 style="color:${sc}">Score: ${score}/100</h3>
+        <p>${verdict}</p>
+        <div class="sbar-row"><div class="sbar"><div class="sbar-fill" style="width:${score}%;background:${sc}"></div></div><span style="font-size:10px;font-family:var(--mono);color:var(--text2)">${passed}/${total} passed</span></div>
+      </div>
+    </div>
+    <table class="score-tbl"><thead><tr><th>Evaluation Question</th><th style="text-align:center">Result</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderRaw(data) {
+  show('e-raw',false); show('c-raw',true);
+  document.getElementById('jv').innerHTML=synHL(JSON.stringify(data,null,2));
+}
+
+function renderErr(msg) {
+  document.getElementById('as-stream')?.remove();
+  show('e-arabic',false);
+  let b=document.getElementById('err-box');
+  if(!b){b=document.createElement('div');b.id='err-box';document.getElementById('panel-arabic').prepend(b);}
+  b.className='err-box'; b.textContent='Error:\n'+msg;
+  switchTab('arabic');
+}
+
+// ════════════════════════════════════════════════════
+// DSPy LAB
+// ════════════════════════════════════════════════════
+function selOpt(name) {
+  dspyOptimizer=name;
+  document.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('oc-'+name).classList.add('selected');
+}
+
+function togProg(name) {
+  if(dspyPrograms.has(name)) dspyPrograms.delete(name);
+  else dspyPrograms.add(name);
+  const el=document.getElementById('pc-'+name);
+  const box=document.getElementById('pb-'+name);
+  const sel=dspyPrograms.has(name);
+  el.classList.toggle('selected',sel);
+  box.textContent=sel?'✓':'';
+}
+
+async function loadDspyStatus() {
+  try {
+    const r=await fetch(`${B()}/dspy/status`);
+    if(!r.ok) return;
+    const data=await r.json();
+    ['arabic','english','analysis'].forEach(prog=>{
+      const info=data.programs?.[prog]||{};
+      const scores=data.latest_scores?.[prog]||{};
+      const compiled=info.compiled_exists;
+      document.getElementById('sd-'+prog).className='status-dot '+(compiled?'compiled':'uncompiled');
+      document.getElementById('sl-'+prog).textContent=compiled?'Compiled':'Not compiled';
+      const after=scores.after;
+      const el=document.getElementById('ss-'+prog);
+      if(after!=null){el.textContent=Math.round(after*100)+'%';el.style.color=after>=.75?'var(--green)':after>=.5?'var(--amber)':'var(--red)';}
+      else{el.textContent='—';el.style.color='var(--text2)';}
+    });
+    loadDspyHistory();
+  } catch(e) {}
+}
+
+async function loadDspyHistory() {
+  try {
+    const r=await fetch(`${B()}/dspy/results`);
+    if(!r.ok) return;
+    const data=await r.json();
+    const el=document.getElementById('dspy-history');
+    if(!data.runs||!data.runs.length){el.innerHTML='<div class="empty" style="min-height:160px"><div class="empty-icon">⚡</div><h3>NO RUNS YET</h3><p>Run optimization to see results</p></div>';return;}
+    const rows=data.runs.map(r=>{
+      const b=r.before??0; const a=r.after??0; const d=r.improvement??(a-b);
+      const bc=b>=.75?'var(--green)':b>=.5?'var(--amber)':'var(--red)';
+      const ac=a>=.75?'var(--green)':a>=.5?'var(--amber)':'var(--red)';
+      const dc=d>0?'improvement-pos':d<0?'improvement-neg':'improvement-neu';
+      return `<tr>
+        <td>${esc(r.program)}</td>
+        <td>${esc(r.optimizer)}</td>
+        <td><div class="spark"><div class="spark-bar"><div class="spark-fill" style="width:${Math.round(b*100)}%;background:${bc}"></div></div><span class="spark-num" style="color:${bc}">${Math.round(b*100)}%</span></div></td>
+        <td><div class="spark"><div class="spark-bar"><div class="spark-fill" style="width:${Math.round(a*100)}%;background:${ac}"></div></div><span class="spark-num" style="color:${ac}">${Math.round(a*100)}%</span></div></td>
+        <td class="${dc}">${d>0?'+':''}${Math.round(d*100)}%</td>
+        <td style="color:var(--text2)">${(r.elapsed_s||0).toFixed(1)}s</td>
+      </tr>`;
+    }).join('');
+    el.innerHTML=`<table class="results-tbl"><thead><tr><th>Program</th><th>Optimizer</th><th>Before</th><th>After</th><th>Δ</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch(e) {}
+}
+
+async function runDspy() {
+  if(!dspyPrograms.size){alert('Select at least one program.');return;}
+  const btn=document.getElementById('dspy-run-btn');
+  btn.disabled=true; btn.textContent='⏳ Optimizing…';
+  const log=document.getElementById('opt-log');
+  log.className='opt-log show'; log.innerHTML='';
+  addLog('dim',`Starting ${dspyOptimizer} optimization for: ${[...dspyPrograms].join(', ')}`);
+  addLog('dim','Making Azure OpenAI API calls…');
+  try {
+    const r=await fetch(`${B()}/dspy/optimize`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({program:[...dspyPrograms].join(',')==='arabic,english,analysis'?'all':[...dspyPrograms][0],optimizer:dspyOptimizer,demos:parseInt(document.getElementById('dspy-demos').value),candidates:parseInt(document.getElementById('dspy-candidates').value)})
+    });
+    if(!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+    const data=await r.json();
+    Object.entries(data.summary||{}).forEach(([prog,s])=>{
+      const d=(s.after??0)-(s.before??0);
+      addLog(d>0?'ok':'warn',`${prog}: ${Math.round((s.before??0)*100)}% → ${Math.round((s.after??0)*100)}% (${d>0?'+':''}${Math.round(d*100)}%)`);
+    });
+    addLog('ok','Optimization complete ✓');
+    await loadDspyStatus();
+  } catch(e){addLog('err','Error: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='▶ Run Optimization';}
+}
+
+function addLog(cls,msg) {
+  const log=document.getElementById('opt-log');
+  const line=document.createElement('div');
+  line.className='log-'+cls;
+  line.textContent=new Date().toLocaleTimeString('en',{hour12:false})+'  '+msg;
+  log.appendChild(line); log.scrollTop=log.scrollHeight;
+}
+
+// ════════════════════════════════════════════════════
+// PROMPTS PAGE
+// ════════════════════════════════════════════════════
+const SIGNATURES = {
+  arabic: {
+    name: 'ArabicRefinement',
+    desc: 'Cleans and refines raw transcript into professional Egyptian-Arabic.',
+    inputs: [
+      {name:'raw_transcript', desc:'Raw call transcript from STT — may contain errors, repetition, missing speaker labels'},
+      {name:'context_info',   desc:'Optional call metadata: Call ID, Agent Name, Date, Duration, Call Type'},
+    ],
+    outputs: [
+      {name:'refined_transcript', desc:'Each line: [HH:MM:SS.mmm] Agent: text  OR  Customer: text. Egyptian dialect. No preamble.'},
+    ],
+    rationale: 'ChainOfThought — model reasons about speaker identification before refining',
+  },
+  english: {
+    name: 'EnglishRefinement',
+    desc: 'Translates and refines Arabic/mixed transcript into professional English.',
+    inputs: [
+      {name:'raw_transcript', desc:'Raw call transcript — may be Arabic, English, or mixed'},
+      {name:'context_info',   desc:'Optional call metadata'},
+    ],
+    outputs: [
+      {name:'refined_transcript', desc:'Each line: [HH:MM:SS.mmm] Agent: text  OR  Customer: text. Natural translation. No preamble.'},
+    ],
+    rationale: 'ChainOfThought — model plans translation approach before writing output',
+  },
+  analysis: {
+    name: 'CallAnalysis',
+    desc: 'Extracts all Scenario 1 fields and scores the call quality.',
+    inputs: [
+      {name:'raw_transcript', desc:'Raw or refined call transcript to analyse'},
+      {name:'context_info',   desc:'Optional call metadata to improve accuracy'},
+    ],
+    outputs: [
+      {name:'main_subject',          desc:'One sentence describing the main reason for this call'},
+      {name:'call_outcome',          desc:'Resolved | Unresolved | Escalated | Follow-up Needed'},
+      {name:'issue_resolution',      desc:'1-2 sentences explaining how the issue was handled'},
+      {name:'call_summary',          desc:'2-3 sentence plain-language summary'},
+      {name:'keywords',              desc:'Up to 5 English keywords, comma-separated'},
+      {name:'call_category',         desc:'Inquiry | Complaint | Technical Support | Billing | Sales | Feedback'},
+      {name:'service',               desc:'Single main service or product discussed'},
+      {name:'agent_attitude',        desc:'Friendly | Neutral | Rude'},
+      {name:'customer_satisfaction', desc:'Satisfied | Neutral | Dissatisfied'},
+      {name:'language',              desc:'Arabic | English | Mixed'},
+      {name:'call_score',            desc:'Integer 0-100 based on 7-question evaluation framework'},
+      {name:'score_breakdown',       desc:'JSON with Pass/Fail + note for each of the 7 questions'},
+    ],
+    rationale: 'ChainOfThought — model reasons through the call before classifying each field',
+  },
+};
+
+const METRIC_DOCS = {
+  arabic: {
+    dimensions: [
+      {name:'label_ratio',   weight:'35%', desc:'Fraction of lines starting with Agent: or Customer:'},
+      {name:'ts_preservation',weight:'20%',desc:'Timestamps from original preserved in output'},
+      {name:'length_score',  weight:'20%', desc:'Line count within ±25% of original'},
+      {name:'arabic_ratio',  weight:'15%', desc:'Fraction of characters that are Arabic Unicode'},
+      {name:'no_intro',      weight:'10%', desc:'No preamble sentence detected in first line'},
+    ]
+  },
+  english: {
+    dimensions: [
+      {name:'label_ratio',   weight:'40%', desc:'Fraction of lines starting with Agent: or Customer:'},
+      {name:'ts_preservation',weight:'20%',desc:'Timestamps preserved exactly'},
+      {name:'length_score',  weight:'20%', desc:'Line count within ±25% of original'},
+      {name:'no_intro',      weight:'10%', desc:'No preamble sentence'},
+      {name:'not_arabic',    weight:'10%', desc:'Output is English (low Arabic character ratio)'},
+    ]
+  },
+  analysis: {
+    dimensions: [
+      {name:'classification', weight:'40%', desc:'outcome/category/attitude/satisfaction/language all valid enum values'},
+      {name:'score_valid',    weight:'20%', desc:'call_score is an integer 0-100'},
+      {name:'breakdown',      weight:'20%', desc:'score_breakdown has all 7 keys with Pass/Fail values'},
+      {name:'keywords',       weight:'10%', desc:'At least 3 keywords present (max 5)'},
+      {name:'text_quality',   weight:'10%', desc:'main_subject/summary/resolution all non-empty and substantial'},
+    ]
+  },
+};
+
+function selPromptSec(sec) {
+  promptSection=sec;
+  ['arabic','english','analysis'].forEach(s=>{document.getElementById('pt-'+s).classList.toggle('active',s===sec);});
+  renderPromptPage();
+}
+
+function switchPromptTab(tab) {
+  promptTab=tab;
+  ['signature','compiled','metric'].forEach(t=>{
+    document.getElementById('ptab-'+t).classList.toggle('active',t===tab);
+    document.getElementById('pp-'+t).classList.toggle('active',t===tab);
+  });
+  renderPromptPage();
+}
+
+function renderPromptPage() {
+  renderSigPanel();
+  renderMetricPanel();
+  loadCompiledPrompt();
+}
+
+function renderSigPanel() {
+  const sig=SIGNATURES[promptSection];
+  const inputs=sig.inputs.map(f=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--cyan)">${f.name}</span>
+        <span class="badge bg-cyan" style="font-size:8px">INPUT</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2)">${f.desc}</div>
+    </div>`).join('');
+  const outputs=sig.outputs.map(f=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">${f.name}</span>
+        <span class="badge bg-amber" style="font-size:8px;border-color:var(--amber);color:var(--amber);background:rgba(255,171,0,.1)">OUTPUT</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2)">${f.desc}</div>
+    </div>`).join('');
+  document.getElementById('pp-signature').innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px">
+      <div style="font-family:var(--display);font-size:18px;letter-spacing:.06em;margin-bottom:4px">${sig.name}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">${sig.desc}</div>
+      <div style="font-size:9px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:10px">Inputs</div>
+      ${inputs}
+      <div style="font-size:9px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin:14px 0 10px">Outputs</div>
+      ${outputs}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--text2)">⚙️ ${sig.rationale}</div>
+    </div>`;
+}
+
+function renderMetricPanel() {
+  const m=METRIC_DOCS[promptSection];
+  const rows=m.dimensions.map(d=>`
+    <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:140px;flex-shrink:0">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--cyan)">${d.name}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--amber);margin-top:2px">weight: ${d.weight}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.5">${d.desc}</div>
+    </div>`).join('');
+  document.getElementById('pp-metric').innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px">
+      <div style="font-family:var(--display);font-size:18px;letter-spacing:.06em;margin-bottom:4px">Metric: ${promptSection}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:16px">All metrics are deterministic — zero extra LLM calls. Score = weighted average of dimensions, 0.0–1.0.</div>
+      ${rows}
+    </div>`;
+}
+
+async function loadCompiledPrompt() {
+  const el=document.getElementById('pp-compiled');
+  el.innerHTML='<div class="empty" style="min-height:200px"><div class="empty-icon">⚡</div><h3>LOADING…</h3></div>';
+  try {
+    const r=await fetch(`${B()}/dspy/status`);
+    if(!r.ok) throw new Error();
+    const data=await r.json();
+    const prog=data.programs?.[promptSection];
+    const scores=data.latest_scores?.[promptSection];
+    if(!prog?.compiled_exists) {
+      el.innerHTML=`<div class="empty" style="min-height:200px"><div class="empty-icon">⚡</div><h3>NOT COMPILED</h3><p>Run DSPy optimization to generate a compiled prompt for the ${promptSection} program</p></div>`;
+      return;
+    }
+    const b=scores?.before; const a=scores?.after; const d=scores?.improvement;
+    const ac=a>=.75?'var(--green)':a>=.5?'var(--amber)':'var(--red)';
+    el.innerHTML=`
+      <div style="background:var(--surface);border:1px solid var(--green);border-radius:var(--r);padding:16px 18px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <div class="status-dot compiled"></div>
+          <div style="font-family:var(--display);font-size:16px;letter-spacing:.06em;color:var(--green)">Compiled · ${promptSection}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+          <div style="text-align:center"><div style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;margin-bottom:4px">Before</div><div style="font-family:var(--display);font-size:22px;color:var(--text2)">${b!=null?Math.round(b*100)+'%':'—'}</div></div>
+          <div style="text-align:center"><div style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;margin-bottom:4px">After</div><div style="font-family:var(--display);font-size:22px;color:${ac}">${a!=null?Math.round(a*100)+'%':'—'}</div></div>
+          <div style="text-align:center"><div style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;margin-bottom:4px">Improvement</div><div style="font-family:var(--display);font-size:22px;color:${d>0?'var(--green)':d<0?'var(--red)':'var(--text2)'}">${d!=null?(d>0?'+':'')+Math.round(d*100)+'%':'—'}</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text2);font-family:var(--mono)">Optimizer: ${scores?.optimizer||'—'} · Compiled path: ${prog.compiled_path||'—'}</div>
+        <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--r);font-size:10px;color:var(--text2);font-family:var(--mono)">
+          DSPy has compiled the optimal few-shot demonstrations and instruction prefix for this program. The compiled JSON file is loaded automatically when the pipeline runs via POST /refine/dspy.
+        </div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML=`<div class="err-box">Could not load status from ${B()}/dspy/status</div>`;
+  }
+}
+
+async function quickScore() {
+  const original=document.getElementById('qs-original').value.trim();
+  const output  =document.getElementById('qs-output').value.trim();
+  if(!output){alert('Paste an output to score.');return;}
+  try {
+    const outObj={};
+    if(promptSection==='arabic'||promptSection==='english') outObj.refined_transcript=output;
+    else {
+      outObj.main_subject='test';outObj.call_outcome='Resolved';outObj.call_category='Inquiry';
+      outObj.agent_attitude='Friendly';outObj.customer_satisfaction='Satisfied';outObj.language='Arabic';
+      outObj.keywords='test';outObj.call_score='80';outObj.score_breakdown='{}';
+      outObj.call_summary=output;outObj.issue_resolution='done.';
+    }
+    const r=await fetch(`${B()}/dspy/score`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({program:promptSection,raw_transcript:original,output:outObj})});
+    if(!r.ok) throw new Error(await r.text());
+    const data=await r.json();
+    const score=data.score||0; const pct=Math.round(score*100);
+    const c=pct>=75?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    document.getElementById('qs-result').innerHTML=`<div style="background:var(--surface);border:1px solid ${c};border-radius:var(--r);padding:12px;display:flex;align-items:center;gap:12px"><div style="font-family:var(--display);font-size:28px;color:${c}">${pct}%</div><div><div style="font-size:11px;font-weight:500">${data.label}</div><div style="font-size:10px;color:var(--text2)">DSPy metric · ${promptSection}</div></div></div>`;
+  } catch(e) {
+    document.getElementById('qs-result').innerHTML=`<div class="err-box">${esc(e.message)}</div>`;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// PROGRESS + UI HELPERS
+// ════════════════════════════════════════════════════
+function showProgress(){document.getElementById('pstrip').classList.add('show');[1,2,3].forEach(i=>setStep(i,''));}
+function setStep(n,s){const el=document.getElementById('ps'+n);if(!el)return;el.classList.remove('active','done');if(s)el.classList.add(s);}
+function markDone(){[1,2,3].forEach(i=>setStep(i,'done'));}
+function setRunning(on){const b=document.getElementById('run-btn');b.disabled=on;b.textContent=on?'⏳ Processing…':'▶ Run Pipeline';}
+function clearResults(){
+  document.getElementById('err-box')?.remove();document.getElementById('as-stream')?.remove();
+  ['arabic','english','analysis','score','raw'].forEach(t=>{show('e-'+t,true);show('c-'+t,false);setBadge(t,'—');});
+}
+function setBadge(tab,val){const el=document.getElementById('b-'+tab);if(el)el.textContent=val;}
+function show(id,visible){const el=document.getElementById(id);if(el)el.style.display=visible?'':'none';}
+function lc(text){if(!text)return 0;return text.split('\n').filter(l=>l.trim()).length;}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function cp(id,btn){const el=document.getElementById(id);if(!el)return;await navigator.clipboard.writeText(el.innerText||el.textContent).catch(()=>{});btn.textContent='✓ Copied';btn.classList.add('ok');setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('ok');},1500);}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function outcomeBadge(v){const m={'Resolved':'bg-green','Unresolved':'bg-red','Escalated':'bg-amber','Follow-up Needed':'bg-amber'};return`<span class="badge ${m[v]||'bg-cyan'}">${esc(v||'—')}</span>`;}
+function attBadge(v){const m={'Friendly':'bg-green','Neutral':'bg-cyan','Rude':'bg-red'};return`<span class="badge ${m[v]||'bg-cyan'}">${esc(v||'—')}</span>`;}
+function satBadge(v){const m={'Satisfied':'bg-green','Neutral':'bg-cyan','Dissatisfied':'bg-red'};return`<span class="badge ${m[v]||'bg-cyan'}">${esc(v||'—')}</span>`;}
+function synHL(json){return esc(json).replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,m=>{if(/^"/.test(m))return/:$/.test(m)?`<span class="jk">${m}</span>`:`<span class="js">${m}</span>`;if(/true|false/.test(m))return`<span class="jb">${m}</span>`;if(/null/.test(m))return`<span class="jnu">${m}</span>`;return`<span class="jn">${m}</span>`;});}
+</script>
+</body>
+</html>
