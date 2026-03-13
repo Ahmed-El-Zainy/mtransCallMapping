@@ -32,8 +32,8 @@ from tests.fixtures import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-MOCK_ARABIC_RESPONSE  = "[00:00:01.200] Agent: أهلاً وسهلاً، معك خدمة عملاء العربي جروب"
-MOCK_ENGLISH_RESPONSE = "[00:00:01.200] Agent: Hello, you've reached ELAraby Group customer service."
+MOCK_ARABIC_RESPONSE  = "[00:00:01.200] Agent: أهلاً وسهلاً، معك خدمة عملاء شركة ميراكوا"
+MOCK_ENGLISH_RESPONSE = "[00:00:01.200] Agent: Hello, you've reached Miraco Company customer service."
 
 
 def _mock_completion(content: str) -> MagicMock:

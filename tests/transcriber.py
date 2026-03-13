@@ -106,7 +106,7 @@ def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
     Transcribe audio using Azure Cognitive Services Speech SDK.
 
     Returns a formatted transcript:
-        [HH:MM:SS.mmm] Agent: مرحبا، معك خدمة عملاء العربي جروب
+        [HH:MM:SS.mmm] Agent: مرحبا، معك خدمة عملاء شركة ميراكوا
         [HH:MM:SS.mmm] Customer: عايز أعرف إيه اللي بيحصل مع التلاجة
 
     Args:

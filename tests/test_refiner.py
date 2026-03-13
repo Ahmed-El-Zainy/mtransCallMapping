@@ -35,8 +35,8 @@ from tests.fixtures import (
 
 # ── Test constants ────────────────────────────────────────────────────────────
 
-MOCK_ARABIC  = "[00:00:01.200] Agent: أهلاً وسهلاً، معك خدمة عملاء العربي جروب"
-MOCK_ENGLISH = "[00:00:01.200] Agent: Hello, you've reached ELAraby Group customer service."
+MOCK_ARABIC  = "[00:00:01.200] Agent: أهلاً وسهلاً، معك خدمة عملاء شركة ميراكوا"
+MOCK_ENGLISH = "[00:00:01.200] Agent: Hello, you've reached Miraco Company customer service."
 MOCK_SUMMARY = {
     "call_topic":          "AC unit price inquiry",
     "customer_request":    "Customer asked about the price of a 2.25 ton inverter AC",
