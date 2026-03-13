@@ -22,7 +22,7 @@ from pathlib import Path
 
 import dspy
 
-from dspy_module.signatures import ArabicRefinement, EnglishRefinement, CallAnalysis
+from signatures import ArabicRefinement, EnglishRefinement, CallAnalysis
 
 COMPILED_DIR = Path(__file__).parent / "compiled"
 COMPILED_DIR.mkdir(exist_ok=True)

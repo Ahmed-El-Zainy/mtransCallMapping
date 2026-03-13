@@ -31,10 +31,10 @@ sys.path.insert(0, str(ROOT))
 import dspy
 from dspy.teleprompt import BootstrapFewShot, BootstrapFewShotWithRandomSearch
 
-from dspy_module.lm_setup   import configure_dspy
-from dspy_module.programs   import ArabicRefiner, EnglishRefiner, CallAnalyser
-from dspy_module.metrics    import arabic_metric, english_metric, analysis_metric
-from dspy_module.trainset   import get_arabic_trainset, get_english_trainset, get_analysis_trainset
+from lm_setup   import configure_dspy
+from programs   import ArabicRefiner, EnglishRefiner, CallAnalyser
+from metrics    import arabic_metric, english_metric, analysis_metric
+from trainset   import get_arabic_trainset, get_english_trainset, get_analysis_trainset
 
 RESULTS_FILE = ROOT / "dspy_module" / "optimization_results.json"
 
