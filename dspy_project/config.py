@@ -111,7 +111,7 @@ Refined:   Customer: My refrigerator isn't working at all.
 {context_info}
 
 Rules:
-- Each line: [timestamp if present] Agent: text  OR  Customer: text
+- Every line: Agent: text  OR  Customer: text
 - Same number of lines as original
 - Professional but conversational tone
 - Product names preserved exactly: Carrier, Midea, Eco Master, Inverter, etc.
