@@ -1,32 +1,7 @@
-"""
-signatures.py — DSPy Signatures for each pipeline step.
-
-A Signature is DSPy's way of declaring:
-  - What goes IN  (InputField)
-  - What comes OUT (OutputField)
-  - The task description (docstring)
-
-DSPy uses the signature to auto-generate, evaluate, and OPTIMISE
-the prompt. You never write prompt text here — DSPy does it.
-
-Three signatures matching our pipeline:
-  1. ArabicRefinement   — clean Egyptian-Arabic transcript
-  2. EnglishRefinement  — professional English transcript
-  3. CallAnalysis       — all Scenario 1 analysis fields
-"""
-
+"""signatures.py — DSPy Signatures for each pipeline step."""
 from __future__ import annotations
 import dspy
 
-from pathlib import Path
-import sys
-import os
-
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
-# ══════════════════════════════════════════════════════════════════════════════
-# SIGNATURE 1 — Arabic transcript refinement
-# ══════════════════════════════════════════════════════════════════════════════
 
 class ArabicRefinement(dspy.Signature):
     """
@@ -36,8 +11,6 @@ class ArabicRefinement(dspy.Signature):
     Preserve all timestamps exactly. Never add new information.
     Use natural Egyptian colloquial Arabic — never Modern Standard Arabic (فصحى).
     """
-
-    # ── Inputs ────────────────────────────────────────────────────────────────
     raw_transcript: str = dspy.InputField(
         desc="Raw call transcript from STT — may contain errors, repetition, missing speaker labels"
     )
@@ -45,8 +18,6 @@ class ArabicRefinement(dspy.Signature):
         desc="Optional call metadata: Call ID, Agent Name, Date, Duration, Call Type",
         default="",
     )
-
-    # ── Output ────────────────────────────────────────────────────────────────
     refined_transcript: str = dspy.OutputField(
         desc=(
             "Cleaned Egyptian-Arabic transcript. "
@@ -56,10 +27,6 @@ class ArabicRefinement(dspy.Signature):
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SIGNATURE 2 — English transcript refinement
-# ══════════════════════════════════════════════════════════════════════════════
-
 class EnglishRefinement(dspy.Signature):
     """
     You are a professional call center transcript editor for Miraco Company.
@@ -68,7 +35,6 @@ class EnglishRefinement(dspy.Signature):
     Translate Arabic naturally — never word-for-word. Preserve product names exactly.
     Preserve all timestamps exactly. Never add new information.
     """
-
     raw_transcript: str = dspy.InputField(
         desc="Raw call transcript from STT — may be Arabic, English, or mixed"
     )
@@ -76,7 +42,6 @@ class EnglishRefinement(dspy.Signature):
         desc="Optional call metadata: Call ID, Agent Name, Date, Duration, Call Type",
         default="",
     )
-
     refined_transcript: str = dspy.OutputField(
         desc=(
             "Professional English transcript. "
@@ -86,10 +51,6 @@ class EnglishRefinement(dspy.Signature):
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SIGNATURE 3 — Full call analysis (all Scenario 1 fields)
-# ══════════════════════════════════════════════════════════════════════════════
-
 class CallAnalysis(dspy.Signature):
     """
     You are an expert call center quality analyst for Miraco Company.
@@ -97,7 +58,6 @@ class CallAnalysis(dspy.Signature):
     Score the call using the 7-question evaluation framework.
     All text classification fields must use only the specified allowed values.
     """
-
     raw_transcript: str = dspy.InputField(
         desc="Raw or refined call transcript to analyse"
     )
@@ -105,8 +65,6 @@ class CallAnalysis(dspy.Signature):
         desc="Optional call metadata to improve analysis accuracy",
         default="",
     )
-
-    # ── Classification outputs ─────────────────────────────────────────────
     main_subject: str = dspy.OutputField(
         desc="One sentence describing the main reason for this call"
     )
@@ -139,16 +97,16 @@ class CallAnalysis(dspy.Signature):
     )
     call_score: str = dspy.OutputField(
         desc=(
-            "Integer 0-100. Based on 7 questions: "
+            "Integer 0-10. Based on 7 questions: "
             "greeted_professionally, identified_customer_need, provided_accurate_info, "
             "maintained_professional_tone, offered_complete_solution, "
             "confirmed_resolution, proper_closing. "
-            "Score = round(passed_count / 7 * 100)"
+            "Score = round(passed_count / 7 * 10)"
         )
     )
     score_breakdown: str = dspy.OutputField(
         desc=(
-            "JSON string with Pass/Fail for each of the 7 questions. Format: "
+            'JSON string with Pass/Fail for each of the 7 questions. Format: '
             '{"greeted_professionally":{"result":"Pass","note":"..."},'
             '"identified_customer_need":{"result":"Pass","note":"..."},'
             '"provided_accurate_info":{"result":"Pass","note":"..."},'
