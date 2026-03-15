@@ -304,5 +304,18 @@ if __name__ == "__main__":
     # args = parser.parse_args()
     # uvicorn.run(app, host=args.host, port=args.port)
     # sys.exit(0)
+     # Quick test
+    import sys
+    # import argparse
+    from pathlib import Path
+
+
+    if len(sys.argv) != 2:
+        print("Usage: python main.py <transcript.txt>")
+        sys.exit(1)
+    transcript = Path(sys.argv[1]).read_text(encoding="utf-8")
+    context = "Test call between customer and agent at Miraco Company."
+    for event in stream_pipeline(transcript, context):
+        print(event)
 
 # EOF
