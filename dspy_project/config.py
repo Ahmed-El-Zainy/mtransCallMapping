@@ -5,23 +5,6 @@ Your role in the system:
   RECEIVE  raw transcript  (from upstream STT API)
   PROCESS  3 LLM calls     (arabic refine → english refine → analysis)
   RETURN   enriched JSON   (to downstream post-call details API)
-
-Output contract (matches Scenario 1 user story):
-  transcript_arabic       refined Arabic transcript  (Speaker: text per line)
-  transcript_english      refined English transcript (Speaker: text per line)
-  main_subject            one-line call subject
-  call_outcome            resolved / unresolved / escalated / follow-up-needed
-  issue_resolution        paragraph explaining how the issue was handled
-  call_summary            2-3 sentence human-readable summary
-  keywords                up to 5 English keywords
-  call_category           Inquiry | Complaint | Technical Support |
-                          Billing | Sales | Feedback
-  service                 single service name mentioned in the call
-  agent_attitude          Friendly | Neutral | Rude
-  customer_satisfaction   Satisfied | Neutral | Dissatisfied
-  call_score              0-10 numeric quality score
-  score_breakdown         per-question pass/fail for the score framework
-  language                Arabic | English | Mixed
 """
 
 import os
@@ -38,25 +21,24 @@ AZURE_OPENAI_DEPLOYMENT  = os.getenv("AZURE_OPENAI_DEPLOYMENT",  "gpt-4o-mini")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROMPT 1 — Arabic transcript refinement
-# Keeps the call in its original language, cleans and formats it.
 # ══════════════════════════════════════════════════════════════════════════════
 
 ARABIC_SYSTEM_PROMPT = """\
-أنت محرر متخصص في تنقيح محادثات مراكز خدمة العملاء المصرية.
+أنت محرر متخصص في تنقيح محادثات مراكز خدمة العملاء المصرية لشركة ميراكوا.
 قواعدك الثابتة:
-- كل سطر يبدأ بـ  Agent:  أو  Customer:  ثم النص
-- الطوابع الزمنية تبقى كما هي بالضبط إن وجدت
+- كل سطر يبدأ بـ  Agent:  أو  Customer:  ثم النص مباشرة
+- لا تضيف طوابع زمنية أبداً
 - اللهجة مصرية عامية مهنية — ليس فصحى أبداً
 - لا تضيف أي معلومة لم تكن في النص الأصلي
 - لا تضيف مقدمات أو تعليقات — ابدأ مباشرة بالمحادثة
 """
 
 ARABIC_USER_PROMPT_TEMPLATE = """\
-هذه محادثة بين عميل وموظف خدمة عملاء من شركة شركة ميراكوا.
+هذه محادثة بين عميل وموظف خدمة عملاء من شركة ميراكوا.
 
 ── مثال توضيحي ──
 الأصلي:
-  ألو معك خدمه عملاء العربى مساء الخير
+  ألو معك خدمه عملاء ميراكوا مساء الخير
   ايه ده التلاجه بتاعتى مش شغاله
 
 المحسّن:
@@ -67,7 +49,7 @@ ARABIC_USER_PROMPT_TEMPLATE = """\
 {context_info}
 
 قواعد التحويل:
-- كل سطر:  [طابع زمني إن وجد]  Agent: أو Customer: ثم النص المصحح
+- كل سطر:  Agent: ثم النص  أو  Customer: ثم النص — بدون أي طوابع زمنية
 - صحح الإملاء والنحو مع الحفاظ على المعنى الأصلي
 - أزل التكرار غير الضروري
 - لا تضيف سطوراً جديدة لم تكن في الأصل
@@ -75,20 +57,19 @@ ARABIC_USER_PROMPT_TEMPLATE = """\
 المحادثة الأصلية:
 {original_transcription}
 
-المحادثة المحسّنة (ابدأ مباشرة):
+المحادثة المحسّنة (ابدأ مباشرة بـ Agent: أو Customer:):
 """
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROMPT 2 — English transcript refinement
-# Translates + cleans into professional call-center English.
 # ══════════════════════════════════════════════════════════════════════════════
 
 ENGLISH_SYSTEM_PROMPT = """\
 You are a professional call center transcript editor for Miraco Company.
 Fixed rules:
-- Every line starts with  Agent:  or  Customer:  followed by the text
-- Preserve timestamps exactly if present
+- Every line starts with exactly  Agent:  or  Customer:  followed by the text
+- Never add timestamps
 - Translate Arabic naturally — never word-for-word
 - Do not add information not in the original
 - No introductions or comments — start directly with line 1
@@ -98,20 +79,17 @@ ENGLISH_USER_PROMPT_TEMPLATE = """\
 Refine this Miraco Company customer service call into professional English.
 
 ── Example ──
-Original:  ألو معك خدمه عملاء العربى
+Original:  ألو معك خدمه عملاء ميراكوا
 Refined:   Agent: Hello, you've reached Miraco Company customer service. How may I help you?
 
 Original:  Customer: ايه ده التلاجه بتاعتى مش شغاله
 Refined:   Customer: My refrigerator isn't working at all.
-
-❌ "Hello, this is the service of the Arabic group"  (literal — wrong)
-✅ "Hello, you've reached Miraco Company customer service"  (natural — correct)
 ── End example ──
 
 {context_info}
 
 Rules:
-- Every line: Agent: text  OR  Customer: text
+- Every line: Agent: text  OR  Customer: text — no timestamps
 - Same number of lines as original
 - Professional but conversational tone
 - Product names preserved exactly: Carrier, Midea, Eco Master, Inverter, etc.
@@ -119,14 +97,12 @@ Rules:
 Original transcript:
 {original_transcription}
 
-Professional English version (start directly):
+Professional English version (start directly with Agent: or Customer:):
 """
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROMPT 3 — Full call analysis
-# Single LLM call that returns ALL analysis fields as one JSON object.
-# Maps 1-to-1 with the user story Scenario 1 fields.
 # ══════════════════════════════════════════════════════════════════════════════
 
 ANALYSIS_SYSTEM_PROMPT = """\
@@ -162,22 +138,25 @@ Return this exact JSON structure (no markdown, no backticks, raw JSON only):
 
   "language": "exactly one of: Arabic | English | Mixed",
 
-  "call_score": <integer 0-10 based on the evaluation below>,
+  "call_score": <integer 0-10 based on the 10 evaluation questions below>,
 
   "score_breakdown": {{
-    "greeted_professionally":     {{"result": "Pass or Fail", "note": "brief reason"}},
-    "identified_customer_need":   {{"result": "Pass or Fail", "note": "brief reason"}},
-    "provided_accurate_info":     {{"result": "Pass or Fail", "note": "brief reason"}},
-    "maintained_professional_tone":{{"result": "Pass or Fail", "note": "brief reason"}},
-    "offered_complete_solution":  {{"result": "Pass or Fail", "note": "brief reason"}},
-    "confirmed_resolution":       {{"result": "Pass or Fail", "note": "brief reason"}},
-    "proper_closing":             {{"result": "Pass or Fail", "note": "brief reason"}}
+    "greeted_professionally":       {{"result": "Pass or Fail", "note": "brief reason"}},
+    "understood_customer_need":     {{"result": "Pass or Fail", "note": "brief reason"}},
+    "answered_all_questions":       {{"result": "Pass or Fail", "note": "list any unanswered questions or say none"}},
+    "provided_accurate_info":       {{"result": "Pass or Fail", "note": "brief reason"}},
+    "satisfied_customer_need":      {{"result": "Pass or Fail", "note": "brief reason"}},
+    "maintained_professional_tone": {{"result": "Pass or Fail", "note": "brief reason"}},
+    "showed_empathy":               {{"result": "Pass or Fail", "note": "brief reason"}},
+    "demonstrated_product_knowledge":{{"result": "Pass or Fail", "note": "brief reason"}},
+    "offered_alternatives_if_needed":{{"result": "Pass or Fail", "note": "N/A if no alternatives were needed"}},
+    "proper_closing":               {{"result": "Pass or Fail", "note": "brief reason"}}
   }}
 }}
 
 Score calculation rule:
-  call_score = round( (number of Pass results / 7) * 10 )
-  Example: 5 Pass out of 7 = round(5/7*10) = 7
+  call_score = round( (number of Pass results / 10) * 10 )
+  Example: 8 Pass out of 10 = round(8/10*10) = 8
 
 Transcript:
 {original_transcription}
@@ -185,8 +164,4 @@ Transcript:
 Return only the JSON object:
 """
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Supported audio extensions (kept here for any audio-handling utilities)
-# ══════════════════════════════════════════════════════════════════════════════
 SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm", ".mp4"}

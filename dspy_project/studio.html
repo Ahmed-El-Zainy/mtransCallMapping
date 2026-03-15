@@ -318,7 +318,7 @@ textarea::placeholder{color:var(--text3)}
 
     <div class="sec" style="flex:1;display:flex;flex-direction:column">
       <div class="sec-label">Raw Transcript</div>
-      <textarea id="transcript" class="ta-ar" style="flex:1;min-height:180px" oninput="updateCount()" placeholder="Paste raw transcript from STT API…&#10;&#10;مساء الخدمة اللي اكون هام مع حضرتك..."></textarea>
+      <textarea id="transcript" class="ta-ar" style="flex:1;min-height:180px" oninput="updateCount()" placeholder="Paste raw transcript from STT API…&#10;&#10;Agent: ألو معك خدمة عملاء ميراكوا&#10;Customer: عايز أستفسر عن تكييف كاريير..."></textarea>
       <div class="char-meta"><span id="ccount">0 chars</span><span id="lcount">0 lines</span></div>
       <button class="btn-primary" id="run-btn" onclick="runApp()">▶ Run Pipeline</button>
     </div>
@@ -348,7 +348,7 @@ textarea::placeholder{color:var(--text3)}
 
       <!-- Arabic -->
       <div class="panel active" id="panel-arabic">
-        <div class="empty" id="e-arabic"><div class="empty-icon">🇦🇪</div><h3>ARABIC TRANSCRIPT</h3><p>Submit a transcript to see the cleaned Egyptian-Arabic version</p></div>
+        <div class="empty" id="e-arabic"><div class="empty-icon">🇦🇪</div><h3>ARABIC TRANSCRIPT</h3><p>Submit a transcript to see the refined Egyptian-Arabic transcript</p></div>
         <div id="c-arabic" style="display:none">
           <div class="block-hdr"><div class="block-title">Refined · Egyptian Arabic</div><button class="copy-btn" onclick="cp('ar-text',this)">Copy</button></div>
           <div class="tx-block arabic" id="ar-text" dir="rtl"></div>
@@ -357,7 +357,7 @@ textarea::placeholder{color:var(--text3)}
 
       <!-- English -->
       <div class="panel" id="panel-english">
-        <div class="empty" id="e-english"><div class="empty-icon">🇬🇧</div><h3>ENGLISH TRANSCRIPT</h3><p>Submit a transcript to see the professional English version</p></div>
+        <div class="empty" id="e-english"><div class="empty-icon">🇬🇧</div><h3>ENGLISH TRANSCRIPT</h3><p>Submit a transcript to see the refined English transcript</p></div>
         <div id="c-english" style="display:none">
           <div class="block-hdr"><div class="block-title">Refined · Professional English</div><button class="copy-btn" onclick="cp('en-text',this)">Copy</button></div>
           <div class="tx-block english" id="en-text"></div>
@@ -702,7 +702,7 @@ function renderAll(data) {
   setBadge('arabic',  lc(data.transcript_arabic)+'L');
   setBadge('english', lc(data.transcript_english)+'L');
   setBadge('analysis','done');
-  setBadge('score',   (data.call_score??'—')+(data.call_score!=null?'%':''));
+  setBadge('score',   (data.call_score!=null ? data.call_score+'/10' : '—'));
   setBadge('raw','JSON');
 }
 
@@ -739,26 +739,59 @@ function renderAnalysis(d) {
 
 function renderScore(d) {
   show('e-score',false); show('c-score',true);
-  const score=d.call_score??0;
-  const bd=d.score_breakdown||{};
-  const passed=Object.values(bd).filter(q=>q.result==='Pass').length;
-  const total=Object.keys(bd).length||7;
-  const sc=score>=75?'var(--green)':score>=50?'var(--amber)':'var(--red)';
-  const verdict=score>=75?'Good quality call ✓':score>=50?'Needs improvement':'Poor quality — review required';
-  const LABELS={greeted_professionally:'Greeted professionally',identified_customer_need:'Identified customer need',provided_accurate_info:'Provided accurate information',maintained_professional_tone:'Maintained professional tone',offered_complete_solution:'Offered complete solution',confirmed_resolution:'Confirmed resolution',proper_closing:'Proper call closing'};
-  const rows=Object.entries(bd).map(([k,v])=>`<tr><td><div class="q-name">${LABELS[k]||k}</div><div class="q-note">${esc(v.note||'')}</div></td><td style="text-align:center;width:70px"><span class="${v.result==='Pass'?'pass':'fail'}">${v.result==='Pass'?'✓ PASS':'✗ FAIL'}</span></td></tr>`).join('');
+  const score   = d.call_score ?? 0;          // 0-10
+  const scorePct= score * 10;                  // convert to % for visual ring/bar
+  const bd      = d.score_breakdown || {};
+  const passed  = Object.values(bd).filter(q=>q.result==='Pass').length;
+  const total   = Object.keys(bd).length || 10;
+  const sc      = scorePct>=75?'var(--green)':scorePct>=50?'var(--amber)':'var(--red)';
+  const verdict = scorePct>=75?'Good quality call ✓':scorePct>=50?'Needs improvement':'Poor quality — review required';
+
+  // Full 10-question labels
+  const LABELS = {
+    greeted_professionally:        'Greeted professionally',
+    understood_customer_need:      'Understood customer need',
+    answered_all_questions:        'Answered all customer questions',
+    provided_accurate_info:        'Provided accurate information',
+    satisfied_customer_need:       'Satisfied the customer need',
+    maintained_professional_tone:  'Maintained professional tone',
+    showed_empathy:                'Showed empathy',
+    demonstrated_product_knowledge:'Demonstrated product knowledge',
+    offered_alternatives_if_needed:'Offered alternatives when needed',
+    proper_closing:                'Proper call closing',
+  };
+
+  const rows = Object.entries(bd).map(([k,v]) => {
+    const isPass = v.result === 'Pass';
+    return `<tr>
+      <td>
+        <div class="q-name">${LABELS[k] || k.replace(/_/g,' ')}</div>
+        <div class="q-note">${esc(v.note||'')}</div>
+      </td>
+      <td style="text-align:center;width:80px">
+        <span class="${isPass?'pass':'fail'}">${isPass?'✓ PASS':'✗ FAIL'}</span>
+      </td>
+    </tr>`;
+  }).join('');
+
   document.getElementById('c-score').innerHTML=`
     <div class="score-hero">
-      <div class="score-ring" style="background:conic-gradient(${sc} ${score*3.6}deg,var(--surface2) 0)">
-        <div class="score-inner" style="color:${sc}">${score}</div>
+      <div class="score-ring" style="background:conic-gradient(${sc} ${scorePct*3.6}deg,var(--surface2) 0)">
+        <div class="score-inner" style="color:${sc};font-size:22px">${score}<span style="font-size:13px">/10</span></div>
       </div>
       <div class="score-meta">
-        <h3 style="color:${sc}">Score: ${score}/100</h3>
+        <h3 style="color:${sc}">Call Score: ${score} / 10</h3>
         <p>${verdict}</p>
-        <div class="sbar-row"><div class="sbar"><div class="sbar-fill" style="width:${score}%;background:${sc}"></div></div><span style="font-size:10px;font-family:var(--mono);color:var(--text2)">${passed}/${total} passed</span></div>
+        <div class="sbar-row">
+          <div class="sbar"><div class="sbar-fill" style="width:${scorePct}%;background:${sc}"></div></div>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text2)">${passed}/${total} questions passed</span>
+        </div>
       </div>
     </div>
-    <table class="score-tbl"><thead><tr><th>Evaluation Question</th><th style="text-align:center">Result</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <table class="score-tbl">
+      <thead><tr><th>Quality Question</th><th style="text-align:center">Result</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 function renderRaw(data) {
@@ -918,39 +951,40 @@ const SIGNATURES = {
       {name:'agent_attitude',        desc:'Friendly | Neutral | Rude'},
       {name:'customer_satisfaction', desc:'Satisfied | Neutral | Dissatisfied'},
       {name:'language',              desc:'Arabic | English | Mixed'},
-      {name:'call_score',            desc:'Integer 0-100 based on 7-question evaluation framework'},
-      {name:'score_breakdown',       desc:'JSON with Pass/Fail + note for each of the 7 questions'},
+      {name:'call_score',            desc:'Integer 0-10 based on 10 conversation quality questions'},
+      {name:'score_breakdown',       desc:'JSON with Pass/Fail + note for each of the 10 quality questions'},
     ],
-    rationale: 'ChainOfThought — model reasons through the call before classifying each field',
+    rationale: 'ChainOfThought — model reasons through the conversation quality before classifying each field',
+    scoreNote: 'Score 0-10: passes / 10 questions × 10. Questions evaluate whether the agent answered every customer question, satisfied their need, showed empathy, demonstrated product knowledge, and maintained professionalism.',
   },
 };
 
 const METRIC_DOCS = {
   arabic: {
     dimensions: [
-      {name:'label_ratio',   weight:'35%', desc:'Fraction of lines starting with Agent: or Customer:'},
-      {name:'ts_preservation',weight:'20%',desc:'Timestamps from original preserved in output'},
-      {name:'length_score',  weight:'20%', desc:'Line count within ±25% of original'},
-      {name:'arabic_ratio',  weight:'15%', desc:'Fraction of characters that are Arabic Unicode'},
+      {name:'label_ratio',   weight:'40%', desc:'Every line starts with exactly Agent: or Customer: — no timestamps'},
+      {name:'no_timestamps', weight:'20%', desc:'Output must contain zero timestamps — penalised if any found'},
+      {name:'length_score',  weight:'20%', desc:'Line count preserved within ±30% of original'},
+      {name:'arabic_ratio',  weight:'10%', desc:'Fraction of characters that are Arabic Unicode'},
       {name:'no_intro',      weight:'10%', desc:'No preamble sentence detected in first line'},
     ]
   },
   english: {
     dimensions: [
-      {name:'label_ratio',   weight:'40%', desc:'Fraction of lines starting with Agent: or Customer:'},
-      {name:'ts_preservation',weight:'20%',desc:'Timestamps preserved exactly'},
-      {name:'length_score',  weight:'20%', desc:'Line count within ±25% of original'},
-      {name:'no_intro',      weight:'10%', desc:'No preamble sentence'},
+      {name:'label_ratio',   weight:'40%', desc:'Every line starts with exactly Agent: or Customer: — no timestamps'},
+      {name:'no_timestamps', weight:'20%', desc:'Output must contain zero timestamps — penalised if any found'},
+      {name:'length_score',  weight:'20%', desc:'Line count preserved within ±30% of original'},
       {name:'not_arabic',    weight:'10%', desc:'Output is English (low Arabic character ratio)'},
+      {name:'no_intro',      weight:'10%', desc:'No preamble sentence detected in first line'},
     ]
   },
   analysis: {
     dimensions: [
-      {name:'classification', weight:'40%', desc:'outcome/category/attitude/satisfaction/language all valid enum values'},
-      {name:'score_valid',    weight:'20%', desc:'call_score is an integer 0-100'},
-      {name:'breakdown',      weight:'20%', desc:'score_breakdown has all 7 keys with Pass/Fail values'},
-      {name:'keywords',       weight:'10%', desc:'At least 3 keywords present (max 5)'},
-      {name:'text_quality',   weight:'10%', desc:'main_subject/summary/resolution all non-empty and substantial'},
+      {name:'classification', weight:'30%', desc:'call_outcome, call_category, agent_attitude, customer_satisfaction, language all valid enum values'},
+      {name:'score_valid',    weight:'20%', desc:'call_score is an integer 0-10'},
+      {name:'breakdown',      weight:'30%', desc:'score_breakdown has all 10 quality questions with Pass/Fail values'},
+      {name:'text_quality',   weight:'10%', desc:'main_subject, call_summary, issue_resolution all non-empty and substantial'},
+      {name:'keywords',       weight:'10%', desc:'At least 3 English keywords present (max 5)'},
     ]
   },
 };
@@ -1003,6 +1037,7 @@ function renderSigPanel() {
       <div style="font-size:9px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin:14px 0 10px">Outputs</div>
       ${outputs}
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--text2)">⚙️ ${sig.rationale}</div>
+      ${sig.scoreNote ? `<div style="margin-top:8px;padding:10px 12px;background:var(--surface2);border-radius:var(--r);font-size:10px;color:var(--amber);border:1px solid rgba(255,171,0,.2)">🎯 ${sig.scoreNote}</div>` : ''}
     </div>`;
 }
 

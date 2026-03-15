@@ -17,12 +17,8 @@ class ArabicRefiner(dspy.Module):
     def forward(self, raw_transcript: str, context_info: str = "") -> dspy.Prediction:
         return self.refine(raw_transcript=raw_transcript, context_info=context_info)
 
-    from datetime import datetime
-
     def save_compiled(self, name: str = "arabic_refiner") -> Path:
-        now = self.datetime.now()
-        file_name = f"{name}_{now.strftime('%Y-%m-%d_%H-%M-%S')}.json"
-        path = COMPILED_DIR / file_name
+        path = COMPILED_DIR / f"{name}.json"
         self.save(str(path))
         return path
 
@@ -75,6 +71,7 @@ class CallAnalyser(dspy.Module):
         return pred
 
     def to_analysis_dict(self, pred: dspy.Prediction) -> dict:
+        
         breakdown_raw = getattr(pred, 'score_breakdown', '{}') or '{}'
         try:
             clean = (breakdown_raw.strip()

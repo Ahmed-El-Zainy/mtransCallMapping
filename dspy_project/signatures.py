@@ -8,7 +8,7 @@ class ArabicRefinement(dspy.Signature):
     You are an expert Egyptian Arabic call center transcript editor for Miraco Company.
     Clean and refine the raw transcript into professional Egyptian dialect Arabic.
     Every output line must start with Agent: or Customer: followed by the text.
-    Preserve all timestamps exactly. Never add new information.
+    Never add new information. Never add timestamps.
     Use natural Egyptian colloquial Arabic — never Modern Standard Arabic (فصحى).
     """
     raw_transcript: str = dspy.InputField(
@@ -21,8 +21,8 @@ class ArabicRefinement(dspy.Signature):
     refined_transcript: str = dspy.OutputField(
         desc=(
             "Cleaned Egyptian-Arabic transcript. "
-            "Each line: [HH:MM:SS.mmm] Agent: text  OR  [HH:MM:SS.mmm] Customer: text. "
-            "Timestamps preserved exactly. Egyptian dialect. No preamble."
+            "Each line starts with exactly 'Agent: ' or 'Customer: ' followed by the text. "
+            "No timestamps. Egyptian dialect only. No preamble — start directly with line 1."
         )
     )
 
@@ -33,7 +33,7 @@ class EnglishRefinement(dspy.Signature):
     Translate and refine the Arabic/mixed call transcript into professional English.
     Every output line must start with Agent: or Customer: followed by the text.
     Translate Arabic naturally — never word-for-word. Preserve product names exactly.
-    Preserve all timestamps exactly. Never add new information.
+    Never add new information. Never add timestamps.
     """
     raw_transcript: str = dspy.InputField(
         desc="Raw call transcript from STT — may be Arabic, English, or mixed"
@@ -45,8 +45,8 @@ class EnglishRefinement(dspy.Signature):
     refined_transcript: str = dspy.OutputField(
         desc=(
             "Professional English transcript. "
-            "Each line: [HH:MM:SS.mmm] Agent: text  OR  [HH:MM:SS.mmm] Customer: text. "
-            "Natural translation, not literal. Timestamps preserved. No preamble."
+            "Each line starts with exactly 'Agent: ' or 'Customer: ' followed by the text. "
+            "No timestamps. Natural translation, not literal. No preamble — start directly with line 1."
         )
     )
 
@@ -55,7 +55,8 @@ class CallAnalysis(dspy.Signature):
     """
     You are an expert call center quality analyst for Miraco Company.
     Analyse the call transcript and extract all required fields accurately.
-    Score the call using the 7-question evaluation framework.
+    Score the call based on how well the agent answered the customer's questions,
+    satisfied their needs, and maintained a professional conversation throughout.
     All text classification fields must use only the specified allowed values.
     """
     raw_transcript: str = dspy.InputField(
@@ -97,22 +98,19 @@ class CallAnalysis(dspy.Signature):
     )
     call_score: str = dspy.OutputField(
         desc=(
-            "Integer 0-10. Based on 7 questions: "
-            "greeted_professionally, identified_customer_need, provided_accurate_info, "
-            "maintained_professional_tone, offered_complete_solution, "
-            "confirmed_resolution, proper_closing. "
-            "Score = round(passed_count / 7 * 10)"
+            "Integer 0-10 quality score based on 10 evaluation questions. "
+            "Score = round(passed_count / 10 * 10). "
+            "Questions cover: greeting, understanding customer need, answering every question asked, "
+            "providing accurate information, satisfying the customer, professional tone, "
+            "empathy, product knowledge, offering alternatives, and proper closing."
         )
     )
     score_breakdown: str = dspy.OutputField(
         desc=(
-            'JSON string with Pass/Fail for each of the 7 questions. Format: '
-            '{"greeted_professionally":{"result":"Pass","note":"..."},'
-            '"identified_customer_need":{"result":"Pass","note":"..."},'
-            '"provided_accurate_info":{"result":"Pass","note":"..."},'
-            '"maintained_professional_tone":{"result":"Pass","note":"..."},'
-            '"offered_complete_solution":{"result":"Pass","note":"..."},'
-            '"confirmed_resolution":{"result":"Fail","note":"..."},'
-            '"proper_closing":{"result":"Pass","note":"..."}}'
+            'JSON string with Pass/Fail and note for each of 10 quality questions. '
+            'Keys: greeted_professionally, understood_customer_need, answered_all_questions, '
+            'provided_accurate_info, satisfied_customer_need, maintained_professional_tone, '
+            'showed_empathy, demonstrated_product_knowledge, offered_alternatives_if_needed, proper_closing. '
+            'Format: {"greeted_professionally":{"result":"Pass","note":"short reason"}, ...}'
         )
     )

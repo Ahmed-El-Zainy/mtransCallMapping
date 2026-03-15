@@ -297,3 +297,12 @@ async def refine_with_dspy(req: RefineRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    # import argparse, sys
+    # parser = argparse.ArgumentParser(description="Run transCallMapping Refiner API server")
+    # parser.add_argument("--host", default="0.0.0.0")
+    # parser.add_argument("--port", default=8000)
+    # args = parser.parse_args()
+    # uvicorn.run(app, host=args.host, port=args.port)
+    # sys.exit(0)
+
+# EOF
